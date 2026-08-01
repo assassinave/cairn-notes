@@ -1,4 +1,4 @@
-# Claude Notes
+# Cairn Notes
 
 A Chrome extension (Manifest V3) that lets you capture and organize responses from Claude.ai conversations.
 
@@ -11,6 +11,10 @@ A Chrome extension (Manifest V3) that lets you capture and organize responses fr
 - **Comment** — saves selected text with a free-form note attached. Highlighted in yellow in the conversation. Comments don't appear in Clips — they live in their own tab.
 
 Select any text in a Claude conversation and a button bar appears with all three options.
+
+**Keyboard shortcut:**
+
+With text selected in a message (or code block), double-tap **`c`** within about 400ms to Clip it — same as clicking the Clip button. Works even when Claude steals focus to the chat box; the taps are blocked from typing into the composer. Ignored while you're selecting inside the composer or Cairn UI, and when Cmd/Ctrl/Alt is held (so Copy still works).
 
 **In-conversation modal:**
 
@@ -26,7 +30,7 @@ This is a development build — no Web Store listing yet.
 
 1. Clone or download this repository
 2. Go to `chrome://extensions/`
-3. Enable **Developer mode** (top-right toggle) fdfafda
+3. Enable **Developer mode** (top-right toggle)
 4. Click **Load unpacked** and select the repository folder
 
 ## Storage

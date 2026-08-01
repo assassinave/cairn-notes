@@ -263,6 +263,8 @@ let currentAnnotationFilter = null; // Ensure this is declared globally
 let sendCommentToInput = localStorage.getItem('cairn-send-on-comment') !== 'false';
 let activeArtifactName = null;
 let activeArtifactTimeout = null;
+let lastClipShortcutTime = 0;
+const CLIP_SHORTCUT_DOUBLE_TAP_MS = 400;
 
 // Style utility functions
 const buttonStyles = {
@@ -332,63 +334,71 @@ function sendToClaudeInput(text) {
   return true;
 }
 
-// --- UPDATED FUNCTION (v3) ---
-// Inject a button into the Claude action bar, next to the Share button
+// Inject a Notes button into Claude's action bar, before Share
+function findShareButton() {
+  return (
+    document.querySelector('[data-testid="wiggle-controls-actions-share"]') ||
+    document.querySelector('[data-testid="wiggle-controls-actions"] button') ||
+    Array.from(document.querySelectorAll('button')).find(
+      (btn) => btn.textContent.trim() === 'Share'
+    ) ||
+    null
+  );
+}
+
 function injectHeaderButton() {
   const buttonId = 'cairn-action-button';
-  // More robust check: Wait for the specific Share button text
   const checkInterval = setInterval(() => {
-    // Find the button containing the text "Share"
-    const shareButton = Array.from(document.querySelectorAll('header button')).find(btn => btn.textContent.trim() === 'Share');
-
-    // Find the div directly wrapping the Share button (often data-state=closed)
-    const shareButtonWrapper = shareButton?.parentNode;
-
-    // Find the container holding the group of buttons (Share, Notes, etc.)
-    const buttonGroupContainer = shareButtonWrapper?.parentNode;
-
-    // Ensure all elements are found and our button isn't already there
-    if (shareButton && shareButtonWrapper && buttonGroupContainer && !document.getElementById(buttonId)) {
-      console.log('Cairn:Found Share button anchor, injecting Notes button...');
-      clearInterval(checkInterval); // Stop checking
-
-      // 1. Clone the actual Share BUTTON
-      const notesButton = shareButton.cloneNode(true); // Deep clone the button
-
-      // 2. Set unique ID
-      notesButton.id = buttonId;
-
-      // 3. Define the new SVG markup
-      const newSvgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 18 18"><path fill="currentColor" fill-rule="evenodd" d="M3.422 2.85a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v12.3a1 1 0 0 1-1 1h-10a1 1 0 0 1-1-1v-.68H3a.422.422 0 0 1 0-.845h.422v-1.68H3a.422.422 0 0 1 0-.843h.422v-1.68H3a.422.422 0 0 1 0-.843h.422v-1.68H3a.422.422 0 0 1 0-.844h.422v-1.68H3a.422.422 0 0 1 0-.843h.422v-.683Zm.844 1.525h.425a.422.422 0 0 0 0-.843h-.425v-.59a.25.25 0 0 1 .25-.25h9.812a.25.25 0 0 1 .25.25V15.06a.25.25 0 0 1-.25.25H4.516a.25.25 0 0 1-.25-.25v-.59h.425a.422.422 0 0 0 0-.843h-.425v-1.68h.425a.42.42 0 0 0 .262-.091.425.425 0 0 0 .16-.331.422.422 0 0 0-.422-.422h-.425v-1.68h.425a.422.422 0 0 0 0-.843h-.425v-1.68h.425a.422.422 0 0 0 0-.844h-.425v-1.68Zm1.695.84c0 .233.19.422.422.422h6.084a.422.422 0 0 0 0-.844H6.383a.415.415 0 0 0-.309.136.39.39 0 0 0-.107.223l-.006.063Zm0 2.524c0 .233.19.422.422.422h6.084a.422.422 0 0 0 0-.844H6.383a.422.422 0 0 0-.422.422Zm.422 2.945a.422.422 0 0 1 0-.844h6.084a.422.422 0 0 1 0 .844H6.383Zm-.422 2.102c0 .233.19.421.422.421h6.084a.422.422 0 0 0 0-.843H6.383a.423.423 0 0 0-.422.422Z" clip-rule="evenodd"/></svg>`; // NOTE: Changed fill="#000" to fill="currentColor" to inherit color
-
-      // 4. Replace content (SVG + Text)
-      notesButton.innerHTML = newSvgMarkup + ' Notes';
-
-      // 5. Add click listener
-      notesButton.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        console.log('Cairn:Action bar button clicked.');
-        const currentConvId = extractConversationId();
-        if (currentConvId === 'default') {
-          alert('Cairn:Please open or start a conversation to use notes.');
-          return;
-        }
-        chrome.runtime.sendMessage({ action: 'toggleModal' });
-      });
-
-      // 6. Insert the new Notes button into the group container,
-      //    BEFORE the Share button's wrapper div.
-      buttonGroupContainer.insertBefore(notesButton, shareButtonWrapper);
-      console.log('Cairn:Action bar button injected before Share button wrapper.');
-
-    } else if (document.getElementById(buttonId)) {
-      // Button already exists
+    if (document.getElementById(buttonId)) {
       clearInterval(checkInterval);
+      return;
     }
+
+    const shareButton = findShareButton();
+    // Actions bar is the direct parent of Share in current Claude DOM
+    const actionsContainer =
+      shareButton?.closest('[data-testid="wiggle-controls-actions"]') ||
+      shareButton?.parentElement;
+
+    if (!shareButton || !actionsContainer) return;
+
+    console.log('Cairn:Found Share button anchor, injecting Notes button...');
+    clearInterval(checkInterval);
+
+    const notesButton = shareButton.cloneNode(true);
+    notesButton.id = buttonId;
+    notesButton.removeAttribute('data-testid');
+    notesButton.setAttribute('data-testid', 'cairn-notes-button');
+    notesButton.removeAttribute('aria-pressed');
+    notesButton.removeAttribute('aria-expanded');
+    notesButton.removeAttribute('aria-haspopup');
+
+    const newSvgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 18 18"><path fill="currentColor" fill-rule="evenodd" d="M3.422 2.85a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v12.3a1 1 0 0 1-1 1h-10a1 1 0 0 1-1-1v-.68H3a.422.422 0 0 1 0-.845h.422v-1.68H3a.422.422 0 0 1 0-.843h.422v-1.68H3a.422.422 0 0 1 0-.843h.422v-1.68H3a.422.422 0 0 1 0-.844h.422v-1.68H3a.422.422 0 0 1 0-.843h.422v-.683Zm.844 1.525h.425a.422.422 0 0 0 0-.843h-.425v-.59a.25.25 0 0 1 .25-.25h9.812a.25.25 0 0 1 .25.25V15.06a.25.25 0 0 1-.25.25H4.516a.25.25 0 0 1-.25-.25v-.59h.425a.422.422 0 0 0 0-.843h-.425v-1.68h.425a.42.42 0 0 0 .262-.091.425.425 0 0 0 .16-.331.422.422 0 0 0-.422-.422h-.425v-1.68h.425a.422.422 0 0 0 0-.843h-.425v-1.68h.425a.422.422 0 0 0 0-.844h-.425v-1.68Zm1.695.84c0 .233.19.422.422.422h6.084a.422.422 0 0 0 0-.844H6.383a.415.415 0 0 0-.309.136.39.39 0 0 0-.107.223l-.006.063Zm0 2.524c0 .233.19.422.422.422h6.084a.422.422 0 0 0 0-.844H6.383a.422.422 0 0 0-.422.422Zm.422 2.945a.422.422 0 0 1 0-.844h6.084a.422.422 0 0 1 0 .844H6.383Zm-.422 2.102c0 .233.19.421.422.421h6.084a.422.422 0 0 0 0-.843H6.383a.423.423 0 0 0-.422.422Z" clip-rule="evenodd"/></svg>`;
+
+    // Keep Claude's CDS button chrome (bg span); only swap the label span
+    const labelSpan = notesButton.querySelector('span:not([aria-hidden])');
+    if (labelSpan) {
+      labelSpan.innerHTML = newSvgMarkup + ' Notes';
+    } else {
+      notesButton.innerHTML = newSvgMarkup + ' Notes';
+    }
+
+    notesButton.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('Cairn:Action bar button clicked.');
+      const currentConvId = extractConversationId();
+      if (currentConvId === 'default') {
+        alert('Cairn:Please open or start a conversation to use notes.');
+        return;
+      }
+      chrome.runtime.sendMessage({ action: 'toggleModal' });
+    });
+
+    actionsContainer.insertBefore(notesButton, shareButton);
+    console.log('Cairn:Action bar button injected before Share.');
   }, 500);
 
-  // Timeout
   setTimeout(() => {
     clearInterval(checkInterval);
     if (!document.getElementById(buttonId)) {
@@ -396,7 +406,6 @@ function injectHeaderButton() {
     }
   }, 15000);
 }
-// --- END UPDATED FUNCTION (v3) ---
 
 // Initialize extension
 function init() {
@@ -437,6 +446,7 @@ function init() {
     
     // Add event listeners
     document.addEventListener('mouseup', handleTextSelection);
+    document.addEventListener('keydown', handleClipDoubleTapShortcut, true);
 
     // Track which artifact panel the user most recently opened (must stay aligned with findArtifactViewControl)
     document.addEventListener('click', (e) => {
@@ -467,6 +477,7 @@ function init() {
     
     // Remove selection listener to prevent showing the clip button
     document.removeEventListener('mouseup', handleTextSelection);
+    document.removeEventListener('keydown', handleClipDoubleTapShortcut, true);
   }
   
   // Add resize listener to keep modal within bounds
@@ -552,8 +563,9 @@ function checkUrlChange() {
       noteModal.style.display = 'none';
     }
 
-    // Remove selection listener
+    // Remove selection listeners
     document.removeEventListener('mouseup', handleTextSelection);
+    document.removeEventListener('keydown', handleClipDoubleTapShortcut, true);
 
     // Clear highlights
     clearAllHighlights();
@@ -591,9 +603,11 @@ function checkUrlChange() {
 
       console.log('New conversation title:', conversationTitle);
 
-      // Add selection listener if it was removed
+      // Add selection listeners if they were removed
       document.removeEventListener('mouseup', handleTextSelection);
       document.addEventListener('mouseup', handleTextSelection);
+      document.removeEventListener('keydown', handleClipDoubleTapShortcut, true);
+      document.addEventListener('keydown', handleClipDoubleTapShortcut, true);
 
       // Reload clips for the new conversation
       loadClips(); // This will eventually call applyHighlights via waitForClaudeContent
@@ -998,6 +1012,103 @@ function findMessageContainer(node) {
 }
 
 // Handle text selection
+function isSelectionInsideIgnoredUi(selection) {
+  if (!selection || selection.rangeCount === 0) return false;
+  let ancestor = selection.getRangeAt(0).commonAncestorContainer;
+  while (ancestor && ancestor !== document.body) {
+    if (ancestor.nodeType === Node.ELEMENT_NODE &&
+        (ancestor.id === 'cairn-modal' || ancestor.id === 'cairn-annotation-modal' ||
+         ancestor.id === 'cairn-comment-popover' ||
+         ancestor.getAttribute?.('data-testid') === 'chat-input')) {
+      return true;
+    }
+    ancestor = ancestor.parentNode;
+  }
+  return false;
+}
+
+function isSelectionInCodeBlock(selection) {
+  let node = selection?.anchorNode;
+  while (node && node !== document.body) {
+    if (node.nodeName === 'CODE' ||
+        (node.classList &&
+         node.classList.contains('prismjs') &&
+         node.classList.contains('code-block__code'))) {
+      return true;
+    }
+    node = node.parentNode;
+  }
+  return false;
+}
+
+function removeFloatingClipButtons() {
+  const clipButton = document.getElementById('cairn-clip-button');
+  const container = clipButton?.closest('div[style*="position: absolute"]');
+  if (container && document.body.contains(container)) {
+    document.body.removeChild(container);
+  }
+}
+
+function flashClipButtonSaved() {
+  const clipButton = document.getElementById('cairn-clip-button');
+  if (!clipButton) {
+    removeFloatingClipButtons();
+    return;
+  }
+  clipButton.textContent = 'Saved!';
+  clipButton.style.backgroundColor = '#4CAF50';
+  setTimeout(() => removeFloatingClipButtons(), 1000);
+}
+
+// Double-tap C with an active selection clips the text (same as Clip button).
+// Claude often steals focus to the composer on keypress — judge by where the
+// selection lives, not activeElement. Capture-phase + preventDefault keeps "c"
+// out of the chat box when we're claiming the shortcut.
+function handleClipDoubleTapShortcut(e) {
+  if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.key.toLowerCase() !== 'c') {
+    lastClipShortcutTime = 0;
+    return;
+  }
+
+  const selection = window.getSelection();
+  const selectedText = selection?.toString().trim() || '';
+
+  if (!selectedText || !selection.rangeCount) {
+    lastClipShortcutTime = 0;
+    return;
+  }
+  // Typing in composer / extension UI with that field selected — don't hijack
+  if (isSelectionInsideIgnoredUi(selection)) {
+    lastClipShortcutTime = 0;
+    return;
+  }
+
+  const isCodeBlock = isSelectionInCodeBlock(selection);
+  const range = selection.getRangeAt(0);
+  const container = findMessageContainer(range.commonAncestorContainer);
+  if (!container && !isCodeBlock) {
+    lastClipShortcutTime = 0;
+    return;
+  }
+
+  // Claim the key so it does not land in the chat composer
+  e.preventDefault();
+  e.stopPropagation();
+
+  const now = Date.now();
+  if (now - lastClipShortcutTime <= CLIP_SHORTCUT_DOUBLE_TAP_MS) {
+    lastClipShortcutTime = 0;
+    console.log('Cairn clip shortcut: double-tap matched — saving clip');
+    saveClip(selection, isCodeBlock, false);
+    flashClipButtonSaved();
+    return;
+  }
+
+  lastClipShortcutTime = now;
+  console.log('Cairn clip shortcut: first tap recorded');
+}
+
 function handleTextSelection(e) {
   const selection = window.getSelection();
   const selectedText = selection.toString().trim(); // Get trimmed text first
@@ -1011,68 +1122,18 @@ function handleTextSelection(e) {
     return;
   }
 
-  // --- NEW CHECK: Prevent clipping inside the modal --- 
-  if (selection.rangeCount > 0) {
-      const range = selection.getRangeAt(0);
-      let ancestor = range.commonAncestorContainer;
-      // Traverse up to check if selection originated within our modals
-      while(ancestor && ancestor !== document.body) {
-          if (ancestor.nodeType === Node.ELEMENT_NODE &&
-              (ancestor.id === 'cairn-modal' || ancestor.id === 'cairn-annotation-modal' || ancestor.id === 'cairn-comment-popover' ||
-               ancestor.getAttribute?.('data-testid') === 'chat-input'))
-          {
-              console.log('Selection is inside the Cairn Notes modal, ignoring.');
-               // Also remove buttons if they somehow appeared for an intra-modal selection
-              if (existingButtonContainer) {
-                  document.body.removeChild(existingButtonContainer);
-              }
-              return; // Exit early, don't show clip buttons
-          }
-          ancestor = ancestor.parentNode;
-      }
+  // Prevent clipping inside extension UI or the chat composer
+  if (isSelectionInsideIgnoredUi(selection)) {
+    console.log('Selection is inside the Cairn Notes modal, ignoring.');
+    if (existingButtonContainer) {
+      document.body.removeChild(existingButtonContainer);
+    }
+    return;
   }
-  // --- END NEW CHECK ---
 
   console.log('Text selected:', selectedText);
   
-  // Check if selection is within a code block
-  let isCodeBlock = false;
-  let node = selection.anchorNode;
-  
-  // Debug logging for node traversal
-  console.log('Starting node type:', node.nodeType);
-  console.log('Starting node name:', node.nodeName);
-  
-  // Log the parent elements to help debug the hierarchy
-  let parentChain = [];
-  let currentNode = node;
-  while (currentNode && currentNode !== document.body) {
-    parentChain.push({
-      nodeName: currentNode.nodeName,
-      classList: currentNode.classList ? Array.from(currentNode.classList) : []
-    });
-    currentNode = currentNode.parentNode;
-  }
-  console.log('Parent element chain:', parentChain);
-  
-  // Reset node for actual code block check
-  node = selection.anchorNode;
-  while (node && node !== document.body) {
-    if (node.nodeName === 'CODE' || 
-        (node.classList && 
-         node.classList.contains('prismjs') && 
-         node.classList.contains('code-block__code'))) {
-      isCodeBlock = true;
-      console.log('Found code block:', {
-        nodeName: node.nodeName,
-        classList: node.classList ? Array.from(node.classList) : [],
-        parentNodeName: node.parentNode ? node.parentNode.nodeName : null
-      });
-      break;
-    }
-    node = node.parentNode;
-  }
-  
+  const isCodeBlock = isSelectionInCodeBlock(selection);
   console.log('Is code block:', isCodeBlock);
   
   // Check if selection is within a Claude message
