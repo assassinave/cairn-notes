@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Cairn Notes Library</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="library.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Cairn Notes Library</h1>
+      <p class="refresh-note">Please refresh the page if new notes are not visible</p>
+    </header>
+
+    <nav class="library-tabs" role="tablist" aria-label="Library sections">
+      <button type="button" id="library-tab-clips" class="tab-button active" role="tab" aria-selected="true" aria-controls="library-main-content" data-library-tab="clips">Clips</button>
+      <button type="button" id="library-tab-annotations" class="tab-button" role="tab" aria-selected="false" aria-controls="library-main-content" data-library-tab="annotations">Annotations</button>
+      <button type="button" id="library-tab-comments" class="tab-button" role="tab" aria-selected="false" aria-controls="library-main-content" data-library-tab="comments">Comments</button>
+    </nav>
+
+    <div id="library-main-content" role="tabpanel">
+      <div class="search-container">
+        <input type="text" id="search" placeholder="Search clips…">
+      </div>
+      <div id="clips-container">
+        <div class="loading">Loading notes...</div>
+      </div>
+    </div>
+  </div>
+  <script src="library.js"></script>
+</body>
+</html>
