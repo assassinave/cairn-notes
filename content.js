@@ -266,6 +266,70 @@ let activeArtifactTimeout = null;
 let lastClipShortcutTime = 0;
 const CLIP_SHORTCUT_DOUBLE_TAP_MS = 400;
 
+function isClaudeSite() {
+  const host = window.location.hostname;
+  return host === 'claude.ai' || host.endsWith('.claude.ai');
+}
+
+function isGeminiSite() {
+  const host = window.location.hostname;
+  return host === 'gemini.google.com' || host.endsWith('.gemini.google.com');
+}
+
+function isChatGptSite() {
+  const host = window.location.hostname;
+  return host === 'chatgpt.com' || host.endsWith('.chatgpt.com') ||
+    host === 'chat.openai.com' || host.endsWith('.chat.openai.com');
+}
+
+function isKimiSite() {
+  const host = window.location.hostname;
+  return host === 'kimi.com' || host.endsWith('.kimi.com') ||
+    host === 'kimi.moonshot.cn' || host.endsWith('.kimi.moonshot.cn');
+}
+
+function isGrokSite() {
+  const host = window.location.hostname;
+  return host === 'grok.com' || host.endsWith('.grok.com') ||
+    host === 'grok.x.ai' || host.endsWith('.grok.x.ai');
+}
+
+/** Web Clip/Annotate on Gemini, ChatGPT, Kimi, and Grok (not general reading sites). */
+function isAiChatClipSite() {
+  return isGeminiSite() || isChatGptSite() || isKimiSite() || isGrokSite();
+}
+
+function isWebClipMode() {
+  return !isClaudeSite();
+}
+
+function getBucketId() {
+  if (isClaudeSite()) {
+    return extractConversationId();
+  }
+  return 'web:' + location.hostname;
+}
+
+function getBucketTitle() {
+  if (isClaudeSite()) {
+    return document.title.replace(' - Claude', '').trim();
+  }
+  return document.title.trim() || location.hostname;
+}
+
+function ensureBucket() {
+  if (!currentConversationId || currentConversationId === 'default') return;
+  if (!allClips[currentConversationId]) {
+    allClips[currentConversationId] = {
+      id: currentConversationId,
+      title: conversationTitle,
+      lastUpdated: new Date().toISOString(),
+      clips: [],
+      comments: []
+    };
+  }
+}
+
 // Style utility functions
 const buttonStyles = {
   base: {
@@ -387,11 +451,6 @@ function injectHeaderButton() {
       e.preventDefault();
       e.stopPropagation();
       console.log('Cairn:Action bar button clicked.');
-      const currentConvId = extractConversationId();
-      if (currentConvId === 'default') {
-        alert('Cairn:Please open or start a conversation to use notes.');
-        return;
-      }
       chrome.runtime.sendMessage({ action: 'toggleModal' });
     });
 
@@ -407,11 +466,132 @@ function injectHeaderButton() {
   }, 15000);
 }
 
+function initWebClipMode() {
+  console.log('Cairn:Initializing web clip mode...');
+  currentConversationId = getBucketId();
+  conversationTitle = getBucketTitle();
+  lastUrl = window.location.href;
+  console.log('Web clip bucket:', currentConversationId, conversationTitle);
+  loadClips();
+  document.addEventListener('mouseup', handleTextSelection);
+  document.addEventListener('keydown', handleClipDoubleTapShortcut, true);
+}
+
+/** Lightweight panel on non-Claude sites: open Library from the toolbar. */
+function createLibraryAccessPanel() {
+  if (document.getElementById('cairn-library-access')) {
+    return document.getElementById('cairn-library-access');
+  }
+
+  const panel = document.createElement('div');
+  panel.id = 'cairn-library-access';
+  applyStyles(panel, createStyleObject(baseStyles.modal, {
+    top: '100px',
+    right: '24px',
+    width: '280px',
+    minHeight: 'auto',
+    maxHeight: '320px',
+    display: 'none',
+    zIndex: '10002'
+  }));
+
+  const header = document.createElement('div');
+  applyStyles(header, baseStyles.header);
+
+  const title = document.createElement('span');
+  title.textContent = 'Cairn Notes';
+  applyStyles(title, { fontWeight: 'bold' });
+
+  const closeButton = document.createElement('button');
+  applyStyles(closeButton, createStyleObject(baseStyles.button, {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '4px'
+  }));
+  closeButton.appendChild(CairnIcons.createIcon('x', 20, styles.colors.text.normal));
+  closeButton.addEventListener('click', () => {
+    panel.style.display = 'none';
+  });
+
+  header.appendChild(title);
+  header.appendChild(closeButton);
+
+  const body = document.createElement('div');
+  body.id = 'cairn-library-access-body';
+  applyStyles(body, {
+    padding: styles.spacing.sm,
+    fontSize: '0.875rem',
+    lineHeight: '1.45',
+    color: styles.colors.text.normal
+  });
+  body.textContent =
+    'Open the Library to browse all notes. Use each note’s source link to jump back to that conversation.';
+
+  const actions = document.createElement('div');
+  applyStyles(actions, baseStyles.actions);
+
+  const openLibraryButton = document.createElement('button');
+  openLibraryButton.textContent = 'Open Library';
+  applyStyles(openLibraryButton, createStyleObject(baseStyles.actionButton, {
+    backgroundColor: styles.colors.primary,
+    textAlign: 'center',
+    padding: '6px 12px 4px 12px',
+    width: '100%'
+  }));
+  openLibraryButton.addEventListener('click', () => {
+    chrome.runtime.sendMessage({ action: 'openLibrary' });
+  });
+
+  actions.appendChild(openLibraryButton);
+  panel.appendChild(header);
+  panel.appendChild(body);
+  panel.appendChild(actions);
+
+  const mount = () => {
+    if (!document.body) {
+      document.addEventListener('DOMContentLoaded', mount, { once: true });
+      return;
+    }
+    if (!document.getElementById('cairn-library-access')) {
+      document.body.appendChild(panel);
+    }
+  };
+  mount();
+  return panel;
+}
+
+function toggleLibraryAccessPanel() {
+  const panel = createLibraryAccessPanel();
+  if (!panel) return false;
+
+  if (isAiChatClipSite()) {
+    const bucketId = getBucketId();
+    const bucket = allClips[bucketId];
+    const count = bucket?.clips?.length || 0;
+    const body = panel.querySelector('#cairn-library-access-body');
+    if (body) {
+      body.textContent = count > 0
+        ? `You have ${count} note${count === 1 ? '' : 's'} from this site. Open the Library to browse them and follow source links back to conversations.`
+        : 'Open the Library to browse all notes. Use each note’s source link to jump back to that conversation.';
+    }
+  }
+
+  panel.style.display = panel.style.display === 'none' ? 'flex' : 'none';
+  return true;
+}
+
 // Initialize extension
 function init() {
-  // Only run on Claude.ai
-  if (!window.location.href.includes('claude.ai')) return;
-  
+  if (isWebClipMode()) {
+    // Every site gets Library access via toolbar; Clip/Annotate only on AI chat hosts
+    createLibraryAccessPanel();
+    if (isAiChatClipSite()) {
+      initWebClipMode();
+    }
+    return;
+  }
+
   console.log('Cairn:Initializing extension...');
   
   // Inject our styles
@@ -430,16 +610,16 @@ function init() {
   console.log('Full page title:', document.title);
   
   // Get conversation title
-  conversationTitle = document.title.replace(' - Claude', '').trim();
+  conversationTitle = getBucketTitle();
   
   console.log('Current conversation:', currentConversationId, conversationTitle);
   
-  // Create modal if it doesn't exist yet
+  // Create modal if it doesn't exist yet (including new chats with no /chat/[id] yet)
   if (!document.getElementById('cairn-modal')) {
     createModal();
   }
   
-  // Only proceed with showing UI if there's a valid conversation ID
+  // Clipping / highlights only once a conversation id exists
   if (currentConversationId !== 'default') {
     // Load saved clips
     loadClips();
@@ -469,15 +649,16 @@ function init() {
     // Set up a content-ready check to ensure Claude has loaded its content
     waitForClaudeContent();
   } else {
-    console.log('No conversation ID found in URL, hiding extension UI');
-    // Hide modal if it exists
-    if (noteModal) {
-      noteModal.style.display = 'none';
-    }
-    
-    // Remove selection listener to prevent showing the clip button
+    console.log('No conversation ID yet — Notes panel still available for Library access');
+    clips = [];
+    comments = [];
+    currentClipId = 0;
+    currentCommentId = 0;
     document.removeEventListener('mouseup', handleTextSelection);
     document.removeEventListener('keydown', handleClipDoubleTapShortcut, true);
+    if (noteModal) {
+      updateModalContent();
+    }
   }
   
   // Add resize listener to keep modal within bounds
@@ -553,30 +734,30 @@ function checkUrlChange() {
     return;
   }
 
-  // Handle navigation AWAY from a conversation
+  // Handle navigation AWAY from a conversation (new chat / home)
   if (newConversationId === 'default') {
-    console.log('Navigated to a page without a conversation ID, hiding extension UI');
+    console.log('Navigated to a page without a conversation ID — Library access stays available');
     currentConversationId = newConversationId;
+    conversationTitle = getBucketTitle();
+    clips = [];
+    comments = [];
+    currentClipId = 0;
+    currentCommentId = 0;
 
-    // Hide modal if it exists
-    if (noteModal && noteModal.style.display !== 'none') {
-      noteModal.style.display = 'none';
-    }
-
-    // Remove selection listeners
+    // Stop clipping until a chat id exists; keep modal available via toolbar / Notes
     document.removeEventListener('mouseup', handleTextSelection);
     document.removeEventListener('keydown', handleClipDoubleTapShortcut, true);
-
-    // Clear highlights
     clearAllHighlights();
 
-    // Remove the button if it exists
-    const notesButton = document.getElementById('cairn-action-button');
-    if (notesButton) {
-        notesButton.remove();
-        console.log('Removed Notes button as we navigated away from a chat.');
+    if (!document.getElementById('cairn-modal')) {
+      createModal();
+    }
+    if (noteModal) {
+      updateModalContent();
     }
 
+    // Re-inject Notes if Share bar is present (e.g. new chat UI)
+    injectHeaderButton();
     return;
   }
 
@@ -1086,13 +1267,16 @@ function handleClipDoubleTapShortcut(e) {
 
   const isCodeBlock = isSelectionInCodeBlock(selection);
   const range = selection.getRangeAt(0);
-  const container = findMessageContainer(range.commonAncestorContainer);
-  if (!container && !isCodeBlock) {
-    lastClipShortcutTime = 0;
-    return;
+  // Claude: only clip message/code selections. Web: any page selection.
+  if (!isWebClipMode()) {
+    const container = findMessageContainer(range.commonAncestorContainer);
+    if (!container && !isCodeBlock) {
+      lastClipShortcutTime = 0;
+      return;
+    }
   }
 
-  // Claim the key so it does not land in the chat composer
+  // Claim the key so it does not land in the chat composer / page inputs
   e.preventDefault();
   e.stopPropagation();
 
@@ -1117,7 +1301,7 @@ function handleTextSelection(e) {
   const existingButtonContainer = document.querySelector('div[style*="position: absolute"][id*="cairn-clip-button"]'); // Find container
   if (!selectedText) {
     if (existingButtonContainer) {
-        document.body.removeChild(existingButtonContainer);
+      document.body.removeChild(existingButtonContainer);
     }
     return;
   }
@@ -1136,11 +1320,12 @@ function handleTextSelection(e) {
   const isCodeBlock = isSelectionInCodeBlock(selection);
   console.log('Is code block:', isCodeBlock);
   
-  // Check if selection is within a Claude message
   const range = selection.getRangeAt(0);
-  const container = findMessageContainer(range.commonAncestorContainer);
+  const canClip = isWebClipMode()
+    || isCodeBlock
+    || !!findMessageContainer(range.commonAncestorContainer);
   
-  if (container || isCodeBlock) {
+  if (canClip) {
     if (isCodeBlock) {
       console.log('Creating clip button for code block selection');
     } else {
@@ -1192,11 +1377,14 @@ function createClipButton(selection, isCodeBlock) {
   secondClipButton.textContent = 'Annotate';
   applyButtonStyles(secondClipButton, 'secondary');
 
-  // Comment button
-  const commentButton = document.createElement('button');
-  commentButton.id = 'cairn-comment-button';
-  commentButton.textContent = 'Comment';
-  applyButtonStyles(commentButton, 'secondary');
+  // Comment button (Claude only — web mode has no highlights/comments)
+  let commentButton = null;
+  if (!isWebClipMode()) {
+    commentButton = document.createElement('button');
+    commentButton.id = 'cairn-comment-button';
+    commentButton.textContent = 'Comment';
+    applyButtonStyles(commentButton, 'secondary');
+  }
 
   clipButton.addEventListener('click', () => {
     saveClip(selection, isCodeBlock, false);
@@ -1222,17 +1410,21 @@ function createClipButton(selection, isCodeBlock) {
 
   const capturedText = selection.toString().trim();
   const capturedRange = selection.rangeCount > 0 ? selection.getRangeAt(0).cloneRange() : null;
-  commentButton.addEventListener('click', () => {
-    openCommentPopover(capturedText, rect, capturedRange);
-    const buttonContainer = commentButton.closest('div[style*="position: absolute"]');
-    if (buttonContainer && document.body.contains(buttonContainer)) {
-      document.body.removeChild(buttonContainer);
-    }
-  });
+  if (commentButton) {
+    commentButton.addEventListener('click', () => {
+      openCommentPopover(capturedText, rect, capturedRange);
+      const buttonContainer = commentButton.closest('div[style*="position: absolute"]');
+      if (buttonContainer && document.body.contains(buttonContainer)) {
+        document.body.removeChild(buttonContainer);
+      }
+    });
+  }
 
   buttonContainer.appendChild(clipButton);
   buttonContainer.appendChild(secondClipButton);
-  buttonContainer.appendChild(commentButton);
+  if (commentButton) {
+    buttonContainer.appendChild(commentButton);
+  }
   document.body.appendChild(buttonContainer);
 
   // Remove clip buttons when clicking elsewhere or after a timeout
@@ -1441,12 +1633,17 @@ function saveClip(selection, isCodeBlock, isSecondary) {
             // Create one clip that represents the entire multi-element selection.
             // All blocks are tagged with the same clip ID so they are managed as a unit.
             const clip = createMultiElementClip(dedupedBlocks, selectedText, isCodeBlock, isSecondary, currentClipId);
+            if (isWebClipMode()) {
+              clip.range = null;
+            }
             clips.push(clip);
-            dedupedBlocks.forEach(block => {
-              const r = document.createRange();
-              r.selectNodeContents(block);
-              highlightClipText(r, clip.id, isSecondary);
-            });
+            if (!isWebClipMode()) {
+              dedupedBlocks.forEach(block => {
+                const r = document.createRange();
+                r.selectNodeContents(block);
+                highlightClipText(r, clip.id, isSecondary);
+              });
+            }
             currentClipId++;
             updateStorageAndUI();
         } else {
@@ -1467,7 +1664,7 @@ function createClipObject(range, text, isCodeBlock, isSecondary, id, isList = fa
         id: id,
         text: text,
         timestamp: new Date().toISOString(),
-        range: getRangeInfo(range), // Make sure getRangeInfo handles the specific range correctly
+        range: isWebClipMode() ? null : getRangeInfo(range),
         url: window.location.href,
         isCode: isCodeBlock,
         isSecondary: isSecondary,
@@ -1504,19 +1701,27 @@ function handleSingleBlockSave(range, text, isCodeBlock, isSecondary) {
     const clip = createClipObject(range, text, isCodeBlock, isSecondary, currentClipId);
     clips.push(clip);
     currentClipId++;
-    highlightText(range, clip.id, clip.isCode, clip.isSecondary);
+    if (!isWebClipMode()) {
+      highlightText(range, clip.id, clip.isCode, clip.isSecondary);
+    }
     // Update storage and UI after saving
     updateStorageAndUI();
 }
 
 // Refactored update logic
 function updateStorageAndUI() {
+    ensureBucket();
     allClips[currentConversationId].clips = clips;
+    allClips[currentConversationId].title = conversationTitle;
     allClips[currentConversationId].lastUpdated = new Date().toISOString();
     
     chrome.storage.local.set({ 'cairnNotesV2': allClips }, () => {
         console.log('Cairn:Clip(s) saved/updated in conversation', currentConversationId);
     });
+
+    if (isWebClipMode()) {
+      return;
+    }
     
     updateModalContent();
     if (noteModal) {
@@ -2004,7 +2209,9 @@ function updateModalContent() {
 
     if (comments.length === 0) {
       const emptyMessage = document.createElement('p');
-      emptyMessage.textContent = 'No comments yet. Select text and click "Comment" to add one.';
+      emptyMessage.textContent = currentConversationId === 'default'
+        ? 'No conversation open yet. Use “View All Notes” below to open the Library.'
+        : 'No comments yet. Select text and click "Comment" to add one.';
       applyStyles(emptyMessage, { color: styles.colors.text.normal });
       modalContent.appendChild(emptyMessage);
       return;
@@ -2161,9 +2368,14 @@ function updateModalContent() {
   // Check for overall clips emptiness first
   if (clips.length === 0) {
     const emptyMessage = document.createElement('p');
-    emptyMessage.textContent = activeTab === 'clips' 
-      ? 'No clips saved in this conversation yet. Select text and click "Clip" to save.'
-      : 'No annotations saved in this conversation yet. Select text and click "Annotate" to save.';
+    if (currentConversationId === 'default') {
+      emptyMessage.textContent =
+        'No conversation open yet. Use “View All Notes” below to open the Library and jump to any saved chat via its source link.';
+    } else {
+      emptyMessage.textContent = activeTab === 'clips'
+        ? 'No clips saved in this conversation yet. Select text and click "Clip" to save.'
+        : 'No annotations saved in this conversation yet. Select text and click "Annotate" to save.';
+    }
     applyStyles(emptyMessage, {
       color: styles.colors.text.normal
     });
@@ -2358,8 +2570,8 @@ function loadClips() {
           });
         }
 
-        // Show modal if we have clips and are in a conversation
-        if (clips.length > 0 && currentConversationId !== 'default') {
+        // Show modal if we have clips and are in a conversation (Claude only)
+        if (!isWebClipMode() && clips.length > 0 && currentConversationId !== 'default') {
           console.log('Found existing clips, showing modal...');
           if (!noteModal) {
             createModal();
@@ -2424,13 +2636,13 @@ function loadClips() {
       };
     }
     
-    // Update modal content
-    updateModalContent();
-    
-    // Apply highlights once Claude's DOM is ready
-    if (clips.length > 0 || comments.length > 0) {
-      console.log('Waiting for Claude content before applying highlights...');
-      waitForClaudeContent();
+    // Update modal / highlights only on Claude
+    if (!isWebClipMode()) {
+      updateModalContent();
+      if (clips.length > 0 || comments.length > 0) {
+        console.log('Waiting for Claude content before applying highlights...');
+        waitForClaudeContent();
+      }
     }
   });
 }
@@ -2440,57 +2652,40 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Content script received message:', message);
   
   if (message.action === 'toggleModal') {
-    // Get current conversation ID
-    const currentConvId = extractConversationId();
-    
-    // Check if we're on a page with a valid conversation ID
-    if (currentConvId === 'default') {
-      console.log('No valid conversation ID found, cannot show modal');
-      sendResponse({ success: false, error: 'No conversation found on this page' });
+    // Non-Claude: toolbar opens the Library access panel
+    if (!isClaudeSite()) {
+      const ok = toggleLibraryAccessPanel();
+      sendResponse({ success: ok });
       return true;
     }
-    
-    // Initialize if needed
+
+    const currentConvId = extractConversationId();
+
+    // Initialize if needed (works for new chats with id === 'default')
     if (!noteModal) {
       console.log('Modal not initialized yet, creating it now');
       init();
+    } else if (currentConvId !== 'default' && currentConvId !== currentConversationId) {
+      console.log('Conversation changed since last modal interaction, updating...');
+      currentConversationId = currentConvId;
+      lastUrl = window.location.href;
+      conversationTitle = document.title.replace(' - Claude', '').trim();
+      clearAllHighlights();
+      loadClips();
+      setTimeout(() => {
+        applyHighlights();
+      }, 100);
     } else {
-      // Check if we need to refresh data due to conversation change
-      if (currentConvId !== currentConversationId) {
-        console.log('Conversation changed since last modal interaction, updating...');
-        // Update conversation info
-        currentConversationId = currentConvId;
-        lastUrl = window.location.href;
-        conversationTitle = document.title.replace(' - Claude', '').trim();
-        
-        // Clear old highlights
-        clearAllHighlights();
-        
-        // Load new clips and update modal
-        loadClips();
-        
-        // This will trigger after loadClips completes
-        setTimeout(() => {
-          // Apply new highlights
-          applyHighlights();
-        }, 100);
-      } else {
-        // Same conversation, but make sure modal content is up to date
-        updateModalContent();
-      }
+      currentConversationId = currentConvId;
+      conversationTitle = getBucketTitle();
+      updateModalContent();
     }
-    
-    // Toggle modal visibility
+
     if (noteModal) {
       if (noteModal.style.display === 'none') {
         console.log('Showing modal');
-
         noteModal.style.display = 'flex';
-
-        // Force update the content when showing
         updateModalContent();
-
-        // Apply saved position (or default), then bounds-check
         applyModalPosition();
       } else {
         console.log('Hiding modal');
@@ -2501,7 +2696,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       console.error('Could not toggle modal, not initialized');
       sendResponse({ success: false, error: 'Modal not initialized' });
     }
-    return true; // Keep the message channel open for async response
+    return true;
   }
 });
 
@@ -3357,8 +3552,8 @@ async function openAnnotationModal(selection, isCodeBlock) {
         }
 
         // --- Save the clip with the label ---
-        const clipRangeInfo = getRangeInfo(range); // Get context for the original range
-        if (!clipRangeInfo) {
+        const clipRangeInfo = isWebClipMode() ? null : getRangeInfo(range);
+        if (!isWebClipMode() && !clipRangeInfo) {
              console.error("Could not get range info for annotation.");
              alert("Error saving annotation context. Please try again.");
              document.body.removeChild(annotationModal);
@@ -3371,14 +3566,16 @@ async function openAnnotationModal(selection, isCodeBlock) {
             isCodeBlock, 
             true, // Mark as secondary/annotation
             currentClipId, // Use the current global ID
-            clipRangeInfo.elementContext.isList // Pass isList flag from context
+            clipRangeInfo?.elementContext?.isList || false
         );
         clip.label = chosenLabel; // Add the label property
 
         clips.push(clip);
         currentClipId++; // Increment AFTER assigning
 
-        highlightText(range, clip.id, clip.isCode, clip.isSecondary);
+        if (!isWebClipMode()) {
+          highlightText(range, clip.id, clip.isCode, clip.isSecondary);
+        }
         updateStorageAndUI(); // Save to storage and update main modal
 
         document.body.removeChild(annotationModal); // Close this modal

@@ -15,6 +15,99 @@ let clearLabelFilterButton;
 // Global data variables
 let allClipsV2 = {};
 
+/** Prefer hostname for web: keys; otherwise conversation title. */
+function displayBucketTitle(bucketId, conversation) {
+  if (typeof bucketId === 'string' && bucketId.startsWith('web:')) {
+    return bucketId.slice(4) || conversation?.title || 'Untitled site';
+  }
+  return conversation?.title || 'Untitled Conversation';
+}
+
+/** Newest item with a saved page URL (clip or comment). */
+function newestItemUrl(conversation) {
+  const items = [
+    ...(conversation?.clips || []),
+    ...(conversation?.comments || []),
+  ].filter((item) => item && typeof item.url === 'string' && item.url);
+  if (items.length === 0) return null;
+  items.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+  return items[0].url;
+}
+
+/**
+ * Resolve a clickable conversation URL for a bucket.
+ * Claude chat ids → saved clip URL or https://claude.ai/chat/[id].
+ * Web buckets → most recent clip/comment URL (hostname alone is not enough).
+ */
+function resolveSourceUrl(bucketId, conversation) {
+  const savedUrl = newestItemUrl(conversation);
+  if (typeof bucketId === 'string' && bucketId.startsWith('web:')) {
+    return savedUrl;
+  }
+  if (bucketId && bucketId !== 'default') {
+    return savedUrl || `https://claude.ai/chat/${bucketId}`;
+  }
+  return savedUrl;
+}
+
+/** Short display label for a full conversation URL. */
+function formatSourceLabel(url) {
+  if (!url) return '';
+  try {
+    const parsed = new URL(url);
+    const path = parsed.pathname === '/' ? '' : parsed.pathname;
+    const label = `${parsed.hostname}${path}${parsed.search}`;
+    return label.length > 64 ? `${label.slice(0, 61)}…` : label;
+  } catch {
+    return url.length > 64 ? `${url.slice(0, 61)}…` : url;
+  }
+}
+
+/** External link that opens the source conversation. */
+function createSourceLink(url, options = {}) {
+  if (!url) return null;
+  const link = document.createElement('a');
+  link.href = url;
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+  link.className = options.className || 'source-link';
+  link.title = url;
+  link.textContent = options.label || formatSourceLabel(url);
+  if (options.stopPropagation) {
+    link.addEventListener('click', (e) => e.stopPropagation());
+  }
+  return link;
+}
+
+/** Build conversation header title: clickable source URL when available. */
+function createConversationTitleElement(bucketId, conversation) {
+  const title = document.createElement('h2');
+  title.className = 'conversation-title';
+  title.style.margin = '0';
+
+  const sourceUrl = resolveSourceUrl(bucketId, conversation);
+  const isWeb = typeof bucketId === 'string' && bucketId.startsWith('web:');
+
+  if (sourceUrl) {
+    // Web buckets: show the conversation URL (not just hostname).
+    // Claude: keep the human title as link text.
+    const label = isWeb
+      ? formatSourceLabel(sourceUrl)
+      : displayBucketTitle(bucketId, conversation);
+    const link = createSourceLink(sourceUrl, {
+      className: 'conversation-source-link',
+      label,
+    });
+    if (link) {
+      title.appendChild(link);
+      return title;
+    }
+  }
+
+  title.textContent = displayBucketTitle(bucketId, conversation);
+  return title;
+}
+
 document.addEventListener('DOMContentLoaded', function () {
   console.log('Library page loaded');
 
@@ -369,12 +462,7 @@ function renderCommentsTab() {
     const header = document.createElement('div');
     header.className = 'conversation-header';
 
-    const title = document.createElement('h2');
-    title.className = 'conversation-title';
-    title.textContent = conversation.title || 'Untitled Conversation';
-    title.style.margin = '0';
-
-    header.appendChild(title);
+    header.appendChild(createConversationTitleElement(convId, conversation));
 
     const commentsList = document.createElement('div');
     commentsList.className = 'conversation-clips';
@@ -427,6 +515,11 @@ function createCommentCard(comment, conversationId) {
   const dateSpan = document.createElement('span');
   dateSpan.textContent = new Date(comment.timestamp).toLocaleString();
   meta.appendChild(dateSpan);
+
+  const commentSource = createSourceLink(comment.url, { stopPropagation: true });
+  if (commentSource) {
+    meta.appendChild(commentSource);
+  }
 
   const actions = document.createElement('div');
   actions.className = 'clip-actions';
@@ -572,11 +665,6 @@ function renderConversations(conversationsObj, options = {}) {
     const conversationHeader = document.createElement('div');
     conversationHeader.className = 'conversation-header';
 
-    const conversationTitle = document.createElement('h2');
-    conversationTitle.className = 'conversation-title';
-    conversationTitle.textContent = conversation.title || 'Untitled Conversation';
-    conversationTitle.style.margin = '0';
-
     const headerActions = document.createElement('div');
     headerActions.className = 'header-actions';
 
@@ -584,11 +672,11 @@ function renderConversations(conversationsObj, options = {}) {
     downloadButton.type = 'button';
     downloadButton.textContent = 'Download';
     downloadButton.className = 'download-btn';
-    downloadButton.addEventListener('click', () => downloadConversation(conversation));
+    downloadButton.addEventListener('click', () => downloadConversation(conversation, conversationId));
 
     headerActions.appendChild(downloadButton);
 
-    conversationHeader.appendChild(conversationTitle);
+    conversationHeader.appendChild(createConversationTitleElement(conversationId, conversation));
     conversationHeader.appendChild(headerActions);
 
     const conversationClips = document.createElement('div');
@@ -703,6 +791,12 @@ function createClipCard(clip, conversationId, cardOptions = {}) {
   }
 
   clipMeta.appendChild(clipDate);
+
+  const clipSource = createSourceLink(clip.url, { stopPropagation: true });
+  if (clipSource) {
+    clipMeta.appendChild(clipSource);
+  }
+
   clipMeta.appendChild(clipNumber);
 
   const clipActions = document.createElement('div');
@@ -897,8 +991,13 @@ function createSvgIcon(name, size, color) {
   return svg;
 }
 
-function downloadConversation(conversation) {
-  let markdownContent = `# ${conversation.title}\n\n`;
+function downloadConversation(conversation, bucketId = '') {
+  const displayTitle = displayBucketTitle(bucketId || conversation.id || '', conversation);
+  const sourceUrl = resolveSourceUrl(bucketId || conversation.id || '', conversation);
+  let markdownContent = `# ${displayTitle}\n\n`;
+  if (sourceUrl) {
+    markdownContent += `Source: ${sourceUrl}\n\n`;
+  }
 
   conversation.clips.forEach((clip) => {
     if (clip.isCode) {
@@ -909,13 +1008,16 @@ function downloadConversation(conversation) {
         markdownContent += `_Label: ${clip.label}_\n\n`;
       }
     }
+    if (clip.url) {
+      markdownContent += `[Open conversation](${clip.url})\n\n`;
+    }
   });
 
   const blob = new Blob([markdownContent], { type: 'text/markdown' });
   const url = URL.createObjectURL(blob);
   const downloadLink = document.createElement('a');
   downloadLink.href = url;
-  const safeTitle = (conversation.title || 'Untitled').replace(/[^a-z0-9]/gi, '-').toLowerCase();
+  const safeTitle = displayTitle.replace(/[^a-z0-9]/gi, '-').toLowerCase() || 'untitled';
   downloadLink.download = `${safeTitle}.md`;
 
   document.body.appendChild(downloadLink);
