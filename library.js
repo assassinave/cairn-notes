@@ -6,7 +6,7 @@ let searchInput, exportButton, clearAllButton;
 let searchContainer, mainContentArea, clipsContainer, commentsMountEl, emptyState;
 let activeLibraryTab = 'clips';
 
-/** Notes-style exact label filter for Annotations tab only */
+/** Notes-style exact topic filter for Annotations (Topics) tab only. Holds a topic id. */
 let currentLibraryAnnotationLabelFilter = null;
 let labelFilterRow;
 let labelFilterSelect;
@@ -14,6 +14,7 @@ let clearLabelFilterButton;
 
 // Global data variables
 let allClipsV2 = {};
+let topicsCache = [];
 
 /** Prefer hostname for web: keys; otherwise conversation title. */
 function displayBucketTitle(bucketId, conversation) {
@@ -181,11 +182,16 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
-  chrome.storage.local.get(['cairnNotesV2'], function (result) {
-    if (result.cairnNotesV2) {
-      allClipsV2 = result.cairnNotesV2;
-    }
-    switchLibraryTab(activeLibraryTab);
+  migrateLabelsToTopics(() => {
+    chrome.storage.local.get(['cairnNotesV2'], function (result) {
+      if (result.cairnNotesV2) {
+        allClipsV2 = result.cairnNotesV2;
+      }
+      getTopics().then((topics) => {
+        topicsCache = topics;
+        switchLibraryTab(activeLibraryTab);
+      });
+    });
   });
 
   if (searchInput) {
@@ -209,11 +215,11 @@ function ensureAnnotationFilterControls() {
 
   labelFilterSelect = document.createElement('select');
   labelFilterSelect.id = 'library-label-filter-select';
-  labelFilterSelect.setAttribute('aria-label', 'Filter by label');
+  labelFilterSelect.setAttribute('aria-label', 'Filter by topic');
 
   const defaultOpt = document.createElement('option');
   defaultOpt.value = '';
-  defaultOpt.textContent = '-- Filter by label --';
+  defaultOpt.textContent = '-- Filter by topic --';
   labelFilterSelect.appendChild(defaultOpt);
 
   labelFilterSelect.addEventListener('change', () => {
@@ -241,35 +247,38 @@ function ensureAnnotationFilterControls() {
   labelFilterRow.appendChild(clearLabelFilterButton);
 }
 
-function getUniqueAnnotationLabels() {
-  const set = new Set();
+function getUsedTopicIds() {
+  const used = new Set();
   Object.values(allClipsV2).forEach((conv) => {
     (conv.clips || []).forEach((c) => {
-      if (c.isSecondary && c.label) set.add(c.label);
+      if (c.isSecondary && c.topicId) used.add(c.topicId);
     });
   });
-  return [...set].sort();
+  return used;
 }
 
 function refreshAnnotationLabelFilterOptions() {
   if (!labelFilterSelect) return;
-  const unique = getUniqueAnnotationLabels();
+  const usedIds = getUsedTopicIds();
+  const availableTopics = topicsCache
+    .filter((t) => usedIds.has(t.id))
+    .sort((a, b) => a.name.localeCompare(b.name));
   const preserved = currentLibraryAnnotationLabelFilter;
 
   labelFilterSelect.innerHTML = '';
   const defaultOpt = document.createElement('option');
   defaultOpt.value = '';
-  defaultOpt.textContent = '-- Filter by label --';
+  defaultOpt.textContent = '-- Filter by topic --';
   labelFilterSelect.appendChild(defaultOpt);
 
-  unique.forEach((l) => {
+  availableTopics.forEach((topic) => {
     const opt = document.createElement('option');
-    opt.value = l;
-    opt.textContent = l;
+    opt.value = topic.id;
+    opt.textContent = topic.name;
     labelFilterSelect.appendChild(opt);
   });
 
-  if (preserved && unique.includes(preserved)) {
+  if (preserved && availableTopics.some((t) => t.id === preserved)) {
     labelFilterSelect.value = preserved;
     currentLibraryAnnotationLabelFilter = preserved;
   } else {
@@ -281,11 +290,11 @@ function refreshAnnotationLabelFilterOptions() {
   }
 }
 
-function filterConversationsByExactLabel(conversationsObj, label) {
+function filterConversationsByTopicId(conversationsObj, topicId) {
   const filtered = {};
   Object.entries(conversationsObj).forEach(([id, conv]) => {
     if (!conv.clips) return;
-    const clips = conv.clips.filter((c) => c.isSecondary && c.label === label);
+    const clips = conv.clips.filter((c) => c.isSecondary && c.topicId === topicId);
     if (clips.length > 0) {
       filtered[id] = { ...conv, clips };
     }
@@ -311,7 +320,7 @@ function updateSearchPlaceholder() {
   if (!searchInput) return;
   const placeholders = {
     clips: 'Search clips…',
-    annotations: 'Search annotations…',
+    annotations: 'Search topics…',
     comments: 'Search comments…',
   };
   searchInput.placeholder = placeholders[activeLibraryTab] || 'Search…';
@@ -382,35 +391,38 @@ async function renderAnnotationsLabelsSidebar(sidebarEl) {
   sidebarEl.innerHTML = '';
   const title = document.createElement('h3');
   title.className = 'annotations-sidebar-title';
-  title.textContent = 'Labels';
+  title.textContent = 'Topics';
   sidebarEl.appendChild(title);
 
-  const labels = await getLabels();
+  const usedIds = getUsedTopicIds();
+  const topics = topicsCache
+    .filter((t) => usedIds.has(t.id))
+    .sort((a, b) => a.name.localeCompare(b.name));
   const list = document.createElement('div');
   list.className = 'annotations-labels-list';
 
-  if (labels.length === 0) {
+  if (topics.length === 0) {
     const empty = document.createElement('p');
     empty.className = 'annotations-labels-empty';
-    empty.textContent = 'No labels yet.';
+    empty.textContent = 'No topics yet.';
     sidebarEl.appendChild(empty);
     return;
   }
 
-  labels.forEach((label) => {
+  topics.forEach((topic) => {
     const row = document.createElement('div');
     row.className = 'annotations-label-row';
 
     const labelText = document.createElement('span');
     labelText.className = 'annotations-label-name';
-    labelText.textContent = label;
+    labelText.textContent = topic.name;
 
     const del = document.createElement('button');
     del.type = 'button';
     del.className = 'annotations-label-trash';
-    del.title = `Delete label "${label}"`;
+    del.title = `Delete topic "${topic.name}"`;
     del.appendChild(createSvgIcon('trash', 18, '#666'));
-    del.addEventListener('click', () => deleteLabel(label));
+    del.addEventListener('click', () => deleteTopic(topic.id, topic.name));
 
     row.appendChild(labelText);
     row.appendChild(del);
@@ -560,10 +572,10 @@ function deleteCommentFromLibrary(commentId, conversationId) {
   });
 }
 
-async function deleteLabel(labelToDelete) {
+async function deleteTopic(topicId, topicName) {
   if (
     !confirm(
-      `Are you sure you want to delete the label "${labelToDelete}"? This will remove the label from all associated annotations.`
+      `Are you sure you want to delete the topic "${topicName}"? This will remove it from all associated annotations.`
     )
   ) {
     return;
@@ -577,27 +589,28 @@ async function deleteLabel(labelToDelete) {
     Object.values(currentAllClips).forEach((conversation) => {
       if (conversation.clips && conversation.clips.length > 0) {
         conversation.clips.forEach((clip) => {
-          if (clip.label === labelToDelete) {
-            delete clip.label;
+          if (clip.topicId === topicId) {
+            delete clip.topicId;
             updated = true;
           }
         });
       }
     });
 
-    const currentLabels = await getLabels();
-    const updatedLabels = currentLabels.filter((label) => label !== labelToDelete);
+    const currentTopics = await getTopics();
+    const updatedTopics = currentTopics.filter((t) => t.id !== topicId);
 
     if (updated) {
       await new Promise((resolve) => chrome.storage.local.set({ cairnNotesV2: currentAllClips }, resolve));
       allClipsV2 = currentAllClips;
-      console.log(`Label "${labelToDelete}" removed from associated clips.`);
+      console.log(`Topic "${topicName}" removed from associated clips.`);
     }
 
-    await new Promise((resolve) => chrome.storage.local.set({ cairnLabels: updatedLabels }, resolve));
-    console.log(`Label "${labelToDelete}" deleted from global list.`);
+    await new Promise((resolve) => chrome.storage.local.set({ cairnTopics: updatedTopics }, resolve));
+    topicsCache = updatedTopics;
+    console.log(`Topic "${topicName}" deleted from global list.`);
 
-    if (currentLibraryAnnotationLabelFilter === labelToDelete) {
+    if (currentLibraryAnnotationLabelFilter === topicId) {
       currentLibraryAnnotationLabelFilter = null;
       if (labelFilterSelect) labelFilterSelect.value = '';
       if (clearLabelFilterButton) clearLabelFilterButton.disabled = true;
@@ -605,15 +618,67 @@ async function deleteLabel(labelToDelete) {
 
     switchLibraryTab('annotations');
   } catch (error) {
-    console.error('Error deleting label:', error);
-    alert('An error occurred while deleting the label.');
+    console.error('Error deleting topic:', error);
+    alert('An error occurred while deleting the topic.');
   }
 }
 
-async function getLabels() {
+async function getTopics() {
   return new Promise((resolve) => {
-    chrome.storage.local.get(['cairnLabels'], (result) => {
-      resolve(result.cairnLabels || []);
+    chrome.storage.local.get(['cairnTopics'], (result) => {
+      resolve(result.cairnTopics || []);
+    });
+  });
+}
+
+// Get-or-create by exact name match; returns the topic object so callers get its id.
+async function addTopic(name) {
+  const existingTopics = await getTopics();
+  const existing = existingTopics.find((t) => t.name === name);
+  if (existing) return existing;
+  const topic = { id: crypto.randomUUID(), name, createdAt: new Date().toISOString() };
+  const updated = [...existingTopics, topic].sort((a, b) => a.name.localeCompare(b.name));
+  return new Promise((resolve) => {
+    chrome.storage.local.set({ cairnTopics: updated }, () => resolve(topic));
+  });
+}
+
+// One-time migration from the legacy flat cairnLabels string array + clip.label
+// to real cairnTopics entities + clip.topicId. Idempotent: no-ops once cairnTopics exists.
+// Duplicated from content.js since the library page can be opened independently.
+function migrateLabelsToTopics(callback) {
+  chrome.storage.local.get(['cairnTopics', 'cairnLabels', 'cairnNotesV2'], (result) => {
+    if (result.cairnTopics) {
+      callback();
+      return;
+    }
+
+    const notes = result.cairnNotesV2 || {};
+    const labelNames = new Set(result.cairnLabels || []);
+    Object.values(notes).forEach((bucket) => {
+      (bucket.clips || []).forEach((clip) => {
+        if (clip.label) labelNames.add(clip.label);
+      });
+    });
+
+    const topics = [...labelNames].sort().map((name) => ({
+      id: crypto.randomUUID(),
+      name,
+      createdAt: new Date().toISOString()
+    }));
+    const nameToId = new Map(topics.map((t) => [t.name, t.id]));
+
+    Object.values(notes).forEach((bucket) => {
+      (bucket.clips || []).forEach((clip) => {
+        if (clip.label) {
+          clip.topicId = nameToId.get(clip.label);
+          delete clip.label;
+        }
+      });
+    });
+
+    chrome.storage.local.set({ cairnTopics: topics, cairnNotesV2: notes }, () => {
+      chrome.storage.local.remove('cairnLabels', callback);
     });
   });
 }
@@ -768,14 +833,17 @@ function createClipCard(clip, conversationId, cardOptions = {}) {
   richDiv.className = 'clip-richtext';
   richDiv.innerHTML = clipToRichHtml(clip);
   clipContent.appendChild(richDiv);
-  if (showLabelOnCard && clip.label) {
-    const clipLabel = document.createElement('div');
-    clipLabel.textContent = clip.label;
-    clipLabel.style.fontSize = '0.75rem';
-    clipLabel.style.color = '#666';
-    clipLabel.style.marginTop = '4px';
-    clipLabel.style.fontStyle = 'italic';
-    clipContent.appendChild(clipLabel);
+  if (showLabelOnCard && clip.topicId) {
+    const topic = topicsCache.find((t) => t.id === clip.topicId);
+    if (topic) {
+      const clipLabel = document.createElement('div');
+      clipLabel.textContent = topic.name;
+      clipLabel.style.fontSize = '0.75rem';
+      clipLabel.style.color = '#666';
+      clipLabel.style.marginTop = '4px';
+      clipLabel.style.fontStyle = 'italic';
+      clipContent.appendChild(clipLabel);
+    }
   }
 
   const clipMeta = document.createElement('div');
@@ -832,8 +900,9 @@ function filterClipsDataBySearch(conversationsObj, searchTerm, clipPredicate) {
     const matching = conversation.clips.filter((clip) => {
       if (!clipPredicate(clip)) return false;
       const inText = clip.text && clip.text.toLowerCase().includes(term);
-      const inLabel = clip.label && clip.label.toLowerCase().includes(term);
-      return inText || inLabel;
+      const topic = clip.topicId && topicsCache.find((t) => t.id === clip.topicId);
+      const inTopic = topic && topic.name.toLowerCase().includes(term);
+      return inText || inTopic;
     });
     if (matching.length > 0) {
       filtered[id] = { ...conversation, clips: matching };
@@ -864,14 +933,15 @@ function applyLibrarySearch() {
       : allClipsV2;
 
     let emptyMessage = term
-      ? 'No annotations match your search.'
-      : 'No annotations yet. Select text and click "Annotate" to add one.';
+      ? 'No topics match your search.'
+      : 'No topics yet. Select text and click "Add to Topic" to add one.';
 
     if (currentLibraryAnnotationLabelFilter) {
-      data = filterConversationsByExactLabel(data, currentLibraryAnnotationLabelFilter);
+      data = filterConversationsByTopicId(data, currentLibraryAnnotationLabelFilter);
       const hasAny = Object.keys(data).length > 0;
       if (!hasAny) {
-        emptyMessage = `No annotations found with label: "${currentLibraryAnnotationLabelFilter}"`;
+        const topic = topicsCache.find((t) => t.id === currentLibraryAnnotationLabelFilter);
+        emptyMessage = `No clips found for topic: "${topic ? topic.name : currentLibraryAnnotationLabelFilter}"`;
       }
     }
 
@@ -912,7 +982,8 @@ function deleteClip(clipId, conversationId) {
 function confirmClearAll() {
   if (confirm('Are you sure you want to delete ALL notes from ALL conversations? This cannot be undone.')) {
     allClipsV2 = {};
-    chrome.storage.local.set({ cairnNotesV2: allClipsV2, cairnLabels: [] }, () => {
+    topicsCache = [];
+    chrome.storage.local.set({ cairnNotesV2: allClipsV2, cairnTopics: [] }, () => {
       console.log('Cairn:All data cleared');
       switchLibraryTab(activeLibraryTab);
     });
@@ -1004,8 +1075,9 @@ function downloadConversation(conversation, bucketId = '') {
       markdownContent += '```\n' + clip.text + '\n```\n\n';
     } else {
       markdownContent += `${clip.text}\n\n`;
-      if (clip.label) {
-        markdownContent += `_Label: ${clip.label}_\n\n`;
+      if (clip.topicId) {
+        const topic = topicsCache.find((t) => t.id === clip.topicId);
+        if (topic) markdownContent += `_Topic: ${topic.name}_\n\n`;
       }
     }
     if (clip.url) {

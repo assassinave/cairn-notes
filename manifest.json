@@ -25,7 +25,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["library.html", "library.js", "library.css"],
+      "resources": ["library.html", "library.js", "library.css", "images/cairn-stack.png"],
       "matches": ["http://*/*", "https://*/*"]
     }
   ],
