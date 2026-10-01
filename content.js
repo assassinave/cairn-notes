@@ -1,43 +1,3 @@
-console.log('Cairn:content.js script loaded.');
-
-// Icon utilities (inlined to avoid cross-script dependency issues)
-// const CairnIcons = (() => {
-//   const icons = {
-//     x: [{ type: 'path', d: 'M18 6L6 18M6 6l12 12' }],
-//     copy: [
-//       { type: 'rect', x: '8', y: '8', width: '14', height: '14', rx: '2', ry: '2' },
-//       { type: 'path', d: 'M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2' }
-//     ],
-//     check: [{ type: 'path', d: 'M20 6L9 17l-5-5' }]
-//   };
-//   function createIcon(name, size = 24, color = 'currentColor') {
-//     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-//     svg.setAttribute('width', size);
-//     svg.setAttribute('height', size);
-//     svg.setAttribute('viewBox', '0 0 24 24');
-//     svg.setAttribute('fill', 'none');
-//     svg.setAttribute('stroke', color);
-//     svg.setAttribute('stroke-width', '2');
-//     svg.setAttribute('stroke-linecap', 'round');
-//     svg.setAttribute('stroke-linejoin', 'round');
-//     (icons[name] || []).forEach(el => {
-//       if (el.type === 'path') {
-//         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-//         path.setAttribute('d', el.d);
-//         svg.appendChild(path);
-//       } else if (el.type === 'rect') {
-//         const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-//         ['x', 'y', 'width', 'height', 'rx', 'ry'].forEach(attr => {
-//           if (el[attr] !== undefined) rect.setAttribute(attr, el[attr]);
-//         });
-//         svg.appendChild(rect);
-//       }
-//     });
-//     return svg;
-//   }
-//   return { createIcon, icons };
-// })();
-
 const CairnIcons = (() => {
   const SVG_NS = 'http://www.w3.org/2000/svg';
   const icons = {
@@ -46,7 +6,12 @@ const CairnIcons = (() => {
       ['rect', { x: 8, y: 8, width: 14, height: 14, rx: 2, ry: 2 }],
       ['path', { d: 'M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2' }]
     ],
-    check: [['path', { d: 'M20 6L9 17l-5-5' }]]
+    check: [['path', { d: 'M20 6L9 17l-5-5' }]],
+    settings: [
+      ['path', { d: 'M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915' }],
+      ['circle', { cx: 12, cy: 12, r: 3 }]
+    ],
+    arrowUp: [['path', { d: 'M12 19V5M6 11l6-6 6 6' }]]
   };
   const createIcon = (name, size = 24, color = 'currentColor') => {
     const svg = document.createElementNS(SVG_NS, 'svg');
@@ -115,6 +80,121 @@ const injectHighlightStyles = () => {
     .cairn-richtext code{font-family:monospace;font-size:.85em}
   `;
 };
+
+// Design tokens for the redesigned UI (Notes panel, onboarding, Add-to-Topic modal,
+// comment popover), matching the "Panel" UI reference. Kept separate from
+// `styles`/`baseStyles` below, which remain in use by the un-redesigned parts.
+const panel = {
+  colors: {
+    bg: '#F7F8F6',
+    text: '#1C2624',
+    subtext: '#5D6A67',
+    subtext2: '#3E4A47',
+    border: '#E4E8E5',
+    borderStrong: '#DDE3E0',
+    card: '#FFFFFF',
+    tabTrack: '#EBEFED',
+    tabBadgeOn: '#E7EFEC',
+    tabBadgeOff: '#DFE5E2',
+    iconBg: '#E7EFEC',
+    topicPillBg: '#EEF2F0',
+    replyBg: '#F4F6F5',
+    danger: '#A33A2A',
+    dangerBg: '#F7ECE9',
+    muted: '#9AA6A2',
+    accent: '#2F6F62' // mockup's own accent color (Main.dc.html props default), not the Claude brand orange
+  },
+  font: {
+    sans: "'Instrument Sans', system-ui, sans-serif",
+    serif: "'Newsreader', Georgia, serif"
+  },
+  sourceColors: {
+    Claude: '#B07A4F',
+    ChatGPT: '#3F8A74',
+    Gemini: '#5676B3',
+    Grok: '#6E6E73',
+    Kimi: '#8A6FB0'
+  }
+};
+
+const injectPanelStyles = () => {
+  if (!document.getElementById('cairn-panel-font')) {
+    const link = document.createElement('link');
+    link.id = 'cairn-panel-font';
+    link.rel = 'stylesheet';
+    link.href = 'https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;1,6..72,400&display=swap';
+    document.head.appendChild(link);
+  }
+  let s = document.getElementById('cairn-panel-styles');
+  if (!s) {
+    s = document.createElement('style');
+    s.id = 'cairn-panel-styles';
+    document.head.appendChild(s);
+  }
+  s.textContent = `
+    #cairn-modal .cairn-ib, #cairn-onboarding-modal .cairn-ib{transition:background .15s,color .15s}
+    #cairn-modal .cairn-ib:hover, #cairn-onboarding-modal .cairn-ib:hover{background:#EDF1EF;color:${panel.colors.text}}
+    #cairn-modal .cairn-card:hover{border-color:${panel.colors.borderStrong}}
+    #cairn-modal .cairn-lnk{text-decoration:none}
+    #cairn-modal .cairn-lnk:hover{text-decoration:underline}
+    #cairn-modal .cairn-danger-btn:hover{color:${panel.colors.danger};background:${panel.colors.dangerBg}}
+    #cairn-modal .cairn-primary-btn:hover, #cairn-onboarding-modal .cairn-primary-btn:hover{filter:brightness(1.1)}
+    #cairn-modal .cairn-chip:hover{border-color:${panel.colors.borderStrong}}
+    #cairn-annotation-modal .cairn-ib:hover, #cairn-comment-popover .cairn-ib:hover{background:#EDF1EF;color:${panel.colors.text}}
+    #cairn-annotation-modal .cairn-ib, #cairn-comment-popover .cairn-ib{transition:background .15s,color .15s}
+    #cairn-toast .cairn-ghost-btn:hover{background:#EDF1EF}
+    .cairn-sel-ghost:hover{background:#EDF1EF !important;color:${panel.colors.text} !important}
+    .cairn-sel-primary:hover{filter:brightness(1.1)}
+    #cairn-annotation-modal .cairn-ghost-btn:hover, #cairn-comment-popover .cairn-ghost-btn:hover{background:#EDF1EF}
+    #cairn-annotation-modal .cairn-primary-btn:hover, #cairn-comment-popover .cairn-primary-btn:hover{filter:brightness(1.1)}
+    #cairn-annotation-modal .cairn-chip:hover{border-color:#B9C4BF}
+    #cairn-annotation-modal .cairn-field:focus, #cairn-comment-popover .cairn-field:focus{outline:none;border-color:${panel.colors.accent} !important;box-shadow:0 0 0 3px rgba(47,111,98,.14)}
+  `;
+};
+
+const panelIconButtonStyle = (size = '36px') => ({
+  width: size,
+  height: size,
+  border: '0',
+  borderRadius: '9px',
+  background: 'transparent',
+  color: panel.colors.subtext,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  cursor: 'pointer',
+  padding: '0',
+  flexShrink: '0'
+});
+
+// bucketId -> a human-readable source label + accent color for cross-bucket
+// Topics-tab cards. Non-'web:' bucket ids are Claude conversations.
+function getBucketSourceLabel(bucketId) {
+  if (!bucketId || !bucketId.startsWith('web:')) return 'Claude';
+  const host = bucketId.slice(4);
+  if (host === 'chatgpt.com' || host === 'chat.openai.com') return 'ChatGPT';
+  if (host === 'gemini.google.com') return 'Gemini';
+  if (host === 'grok.com' || host === 'grok.x.ai') return 'Grok';
+  if (host === 'kimi.com' || host === 'kimi.moonshot.cn') return 'Kimi';
+  return host;
+}
+
+function formatRelativeClipTime(iso) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const now = new Date();
+  const diffMin = Math.floor((now - d) / 60000);
+  if (diffMin < 1) return 'Just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const dayDiff = Math.round((startOfToday - startOfDate) / 86400000);
+  if (dayDiff === 1) return 'Yesterday';
+  if (dayDiff < 7) return d.toLocaleDateString(undefined, { weekday: 'short' });
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
 
 const createStyleObject = (...objects) => Object.assign({}, ...objects);
 
@@ -259,36 +339,103 @@ let conversationTitle = '';
 let lastUrl = ''; // Track URL for SPA navigation detection
 let activeTab = 'clips'; // Track active tab
 let isApplyingHighlights = false;
-let currentAnnotationFilter = null; // Ensure this is declared globally
+let currentAnnotationFilter = null; // Holds a topic id when the Topics tab filter is active
+let topicsCache = []; // In-memory mirror of cairnTopics, kept in sync so sync render paths can resolve topicId -> name
 let sendCommentToInput = localStorage.getItem('cairn-send-on-comment') !== 'false';
+// Whether the floating Clip / Add to Topic / Comment bar appears on text selection.
+// Off = shortcuts (double-tap c / t / k) still work. Global, stored in chrome.storage.
+const SHOW_SELECTION_BUTTONS_KEY = 'cairnShowSelectionButtons';
+let showSelectionButtons = true;
+chrome.storage.local.get(SHOW_SELECTION_BUTTONS_KEY, (r) => {
+  showSelectionButtons = r[SHOW_SELECTION_BUTTONS_KEY] !== false;
+});
 let activeArtifactName = null;
 let activeArtifactTimeout = null;
 let lastClipShortcutTime = 0;
+let lastClipShortcutKey = '';
+let hasInitialized = false;
 const CLIP_SHORTCUT_DOUBLE_TAP_MS = 400;
 
-// Style utility functions
+function isClaudeSite() {
+  const host = window.location.hostname;
+  return host === 'claude.ai' || host.endsWith('.claude.ai');
+}
+
+function isWebClipMode() {
+  return !isClaudeSite();
+}
+
+/** Clips are matched back to page elements (tag + elementText + occurrenceIndex) so they
+ *  can be highlighted and restored on reload. This locator system doesn't assume any
+ *  particular site structure — it just walks up from the selection to the nearest element
+ *  ancestor and re-finds it later by tag + trimmed text + nth-occurrence — so it applies
+ *  the same way on Claude and on any other site. Restoration degrades gracefully (no
+ *  match found -> no highlight rendered, no error) if a site's DOM changes shape between
+ *  visits, which is expected on unfamiliar/arbitrary sites. */
+function supportsElementHighlights() {
+  return true;
+}
+
+function getBucketId() {
+  if (isClaudeSite()) {
+    return extractConversationId();
+  }
+  return 'web:' + location.hostname;
+}
+
+function getBucketTitle() {
+  if (isClaudeSite()) {
+    return document.title.replace(' - Claude', '').trim();
+  }
+  return document.title.trim() || location.hostname;
+}
+
+function ensureBucket() {
+  if (!currentConversationId || currentConversationId === 'default') return;
+  if (!allClips[currentConversationId]) {
+    allClips[currentConversationId] = {
+      id: currentConversationId,
+      title: conversationTitle,
+      lastUpdated: new Date().toISOString(),
+      clips: [],
+      comments: []
+    };
+  }
+}
+
+// Floating selection bar (Clip / Add to Topic / Comment), styled with the
+// redesigned panel tokens: a small card holding an accent-filled primary action
+// and ghost secondary actions. Hover styles live in injectPanelStyles().
 const buttonStyles = {
-  base: {
-    padding: '5px 10px',
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: 'bold',
-    boxShadow: '0 2px 5px rgba(0, 0, 0, 0.2)'
-  },
   container: {
     position: 'absolute',
     zIndex: '10001',
     display: 'flex',
-    gap: '5px'
+    alignItems: 'center',
+    gap: '2px',
+    padding: '4px',
+    background: panel.colors.bg,
+    border: `1px solid ${panel.colors.borderStrong}`,
+    borderRadius: '12px',
+    boxShadow: '0 12px 32px rgba(28,38,36,.12)',
+    fontFamily: panel.font.sans
+  },
+  base: {
+    height: '30px',
+    padding: '0 12px',
+    border: '0',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    font: `500 12.5px ${panel.font.sans}`,
+    whiteSpace: 'nowrap'
   }
 };
 
 const applyButtonStyles = (button, type = 'primary') => {
   Object.assign(button.style, buttonStyles.base);
-  button.style.backgroundColor = type === 'primary' ? '#c96442' : '#444';
+  button.classList.add(type === 'primary' ? 'cairn-sel-primary' : 'cairn-sel-ghost');
+  button.style.background = type === 'primary' ? panel.colors.accent : 'transparent';
+  button.style.color = type === 'primary' ? '#FFFFFF' : panel.colors.subtext2;
 };
 
 function getChatComposerEditable(root) {
@@ -362,7 +509,6 @@ function injectHeaderButton() {
 
     if (!shareButton || !actionsContainer) return;
 
-    console.log('Cairn:Found Share button anchor, injecting Notes button...');
     clearInterval(checkInterval);
 
     const notesButton = shareButton.cloneNode(true);
@@ -386,17 +532,10 @@ function injectHeaderButton() {
     notesButton.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      console.log('Cairn:Action bar button clicked.');
-      const currentConvId = extractConversationId();
-      if (currentConvId === 'default') {
-        alert('Cairn:Please open or start a conversation to use notes.');
-        return;
-      }
       chrome.runtime.sendMessage({ action: 'toggleModal' });
     });
 
     actionsContainer.insertBefore(notesButton, shareButton);
-    console.log('Cairn:Action bar button injected before Share.');
   }, 500);
 
   setTimeout(() => {
@@ -407,12 +546,32 @@ function injectHeaderButton() {
   }, 15000);
 }
 
-// Initialize extension
+function initWebClipMode() {
+  currentConversationId = getBucketId();
+  conversationTitle = getBucketTitle();
+  lastUrl = window.location.href;
+  if (supportsElementHighlights()) {
+    injectHighlightStyles();
+    setupWebHighlightUrlMonitoring();
+  }
+  loadClips();
+  document.addEventListener('mouseup', handleTextSelection);
+  document.addEventListener('keydown', handleClipDoubleTapShortcut, true);
+}
+
+// Initialize extension (once per page; SPA navigation is handled by setupUrlChangeMonitoring)
 function init() {
-  // Only run on Claude.ai
-  if (!window.location.href.includes('claude.ai')) return;
-  
-  console.log('Cairn:Initializing extension...');
+  if (hasInitialized) return;
+  hasInitialized = true;
+
+  setupStorageChangeMonitoring();
+
+  if (isWebClipMode()) {
+    // Every non-Claude site gets the full Notes modal (Clips + Topics), same as Claude.
+    initWebClipMode();
+    return;
+  }
+
   
   // Inject our styles
   injectHighlightStyles();
@@ -426,20 +585,17 @@ function init() {
   // Extract conversation ID from URL
   currentConversationId = extractConversationId();
   
-  // Log the full page title
-  console.log('Full page title:', document.title);
   
   // Get conversation title
-  conversationTitle = document.title.replace(' - Claude', '').trim();
+  conversationTitle = getBucketTitle();
   
-  console.log('Current conversation:', currentConversationId, conversationTitle);
   
-  // Create modal if it doesn't exist yet
+  // Create modal if it doesn't exist yet (including new chats with no /chat/[id] yet)
   if (!document.getElementById('cairn-modal')) {
     createModal();
   }
   
-  // Only proceed with showing UI if there's a valid conversation ID
+  // Clipping / highlights only once a conversation id exists
   if (currentConversationId !== 'default') {
     // Load saved clips
     loadClips();
@@ -469,15 +625,15 @@ function init() {
     // Set up a content-ready check to ensure Claude has loaded its content
     waitForClaudeContent();
   } else {
-    console.log('No conversation ID found in URL, hiding extension UI');
-    // Hide modal if it exists
-    if (noteModal) {
-      noteModal.style.display = 'none';
-    }
-    
-    // Remove selection listener to prevent showing the clip button
+    clips = [];
+    comments = [];
+    currentClipId = 0;
+    currentCommentId = 0;
     document.removeEventListener('mouseup', handleTextSelection);
     document.removeEventListener('keydown', handleClipDoubleTapShortcut, true);
+    if (noteModal) {
+      updateModalContent();
+    }
   }
   
   // Add resize listener to keep modal within bounds
@@ -487,13 +643,41 @@ function init() {
   setupUrlChangeMonitoring();
 }
 
+// Notes/topics can also be deleted from library.html, a separate page/tab. Keep this
+// content script's in-memory clips/topics (and the modal, if open) in sync with storage
+// writes that didn't originate here, so deleted topics/clips don't linger until reload.
+function setupStorageChangeMonitoring() {
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== 'local') return;
+
+    if (changes[SHOW_SELECTION_BUTTONS_KEY]) {
+      showSelectionButtons = changes[SHOW_SELECTION_BUTTONS_KEY].newValue !== false;
+    }
+
+    if (changes.cairnTopics) {
+      topicsCache = changes.cairnTopics.newValue || [];
+      if (noteModal) updateModalContent();
+    }
+
+    if (changes.cairnNotesV2) {
+      allClips = changes.cairnNotesV2.newValue || {};
+      const bucket = allClips[currentConversationId];
+      clips = bucket ? bucket.clips : [];
+      comments = bucket ? (bucket.comments || []) : [];
+      clearAllHighlights();
+      applyHighlights();
+      applyCommentHighlights();
+      if (noteModal) updateModalContent();
+    }
+  });
+}
+
 // Wait for Claude's content to be ready before applying highlights
 function waitForClaudeContent(attempt = 0, maxAttempts = 10) {
   // Check if Claude has rendered its messages
   const messageContainers = document.querySelectorAll('.message, .prose, [role="region"], .whitespace-pre-wrap');
   
   if (messageContainers.length > 0) {
-    console.log('Claude content detected, applying highlights...');
     // Apply highlights now that content is available
     setTimeout(() => {
       applyHighlights();
@@ -502,12 +686,9 @@ function waitForClaudeContent(attempt = 0, maxAttempts = 10) {
   } else if (attempt < maxAttempts) {
     // Retry with exponential backoff
     const delay = 300 * Math.pow(1.5, attempt);
-    console.log(`No Claude content detected yet, retry in ${delay}ms (attempt ${attempt + 1}/${maxAttempts})`);
     setTimeout(() => {
       waitForClaudeContent(attempt + 1, maxAttempts);
     }, delay);
-  } else {
-    console.log('Maximum retry attempts reached, could not detect Claude content');
   }
 }
 
@@ -540,7 +721,6 @@ function checkUrlChange() {
   // If URL hasn't changed, do nothing
   if (currentUrl === previousUrl) return;
 
-  console.log('URL changed:', previousUrl, '->', currentUrl);
   lastUrl = currentUrl; // Update lastUrl immediately
 
   // Get new conversation ID
@@ -548,47 +728,43 @@ function checkUrlChange() {
 
   // Handle case where URL changes but ID extraction might be delayed
   if (newConversationId === 'default' && currentUrl.includes('claude.ai/chat/')) {
-    console.log('URL indicates a conversation but couldn\'t extract ID, will retry');
     setTimeout(checkUrlChange, 500); // Retry after delay
     return;
   }
 
-  // Handle navigation AWAY from a conversation
+  // Handle navigation AWAY from a conversation (new chat / home)
   if (newConversationId === 'default') {
-    console.log('Navigated to a page without a conversation ID, hiding extension UI');
     currentConversationId = newConversationId;
+    conversationTitle = getBucketTitle();
+    clips = [];
+    comments = [];
+    currentClipId = 0;
+    currentCommentId = 0;
 
-    // Hide modal if it exists
-    if (noteModal && noteModal.style.display !== 'none') {
-      noteModal.style.display = 'none';
-    }
-
-    // Remove selection listeners
+    // Stop clipping until a chat id exists; keep modal available via toolbar / Notes
     document.removeEventListener('mouseup', handleTextSelection);
     document.removeEventListener('keydown', handleClipDoubleTapShortcut, true);
-
-    // Clear highlights
     clearAllHighlights();
 
-    // Remove the button if it exists
-    const notesButton = document.getElementById('cairn-action-button');
-    if (notesButton) {
-        notesButton.remove();
-        console.log('Removed Notes button as we navigated away from a chat.');
+    if (!document.getElementById('cairn-modal')) {
+      createModal();
+    }
+    if (noteModal) {
+      updateModalContent();
     }
 
+    // Re-inject Notes if Share bar is present (e.g. new chat UI)
+    injectHeaderButton();
     return;
   }
 
   // --- Key Change: Ensure button injection happens on valid navigation ---
   // Whether the conversation ID changed or just the URL (indicating potential DOM update),
   // ensure the button is present.
-  console.log('Valid conversation context detected, ensuring header button exists...');
   injectHeaderButton(); // Call injection function - it has internal checks
 
   // Handle conversation *data* change only if ID is different
   if (newConversationId !== currentConversationId) {
-    console.log('Conversation changed:', currentConversationId, '->', newConversationId);
     currentConversationId = newConversationId;
 
     // Update conversation title (with retry for SPA transitions)
@@ -596,12 +772,10 @@ function checkUrlChange() {
       conversationTitle = document.title.replace(' - Claude', '').trim();
 
       if (conversationTitle === 'Claude' || conversationTitle === '') {
-        console.log('Title not yet updated, will retry');
         setTimeout(updateTitle, 300);
         return;
       }
 
-      console.log('New conversation title:', conversationTitle);
 
       // Add selection listeners if they were removed
       document.removeEventListener('mouseup', handleTextSelection);
@@ -623,7 +797,6 @@ function checkUrlChange() {
 
     updateTitle(); // Start the title update process
   } else {
-      console.log('URL changed, but conversation ID remains the same. Button re-checked.');
       // Optional: Maybe trigger a light refresh or highlight check even if ID is the same?
       // For now, ensuring the button exists is the main goal.
       // We might need to re-apply highlights if the content area also re-rendered.
@@ -638,6 +811,24 @@ function extractConversationId() {
   return match ? match[1] : 'default';
 }
 
+// Many sites are single-page apps: navigating within them swaps content without a
+// full reload, which drops any highlight spans in it. The clip bucket for web sites
+// is per-hostname (not per-page), so there is no data to reload here — just reapply
+// highlights against whatever page is now shown.
+function setupWebHighlightUrlMonitoring() {
+  let lastWebUrl = window.location.href;
+  const reapply = () => {
+    if (window.location.href === lastWebUrl) return;
+    lastWebUrl = window.location.href;
+    setTimeout(() => applyHighlights(), 300);
+  };
+  setInterval(reapply, 1000);
+  const titleEl = document.querySelector('title');
+  if (titleEl) {
+    new MutationObserver(reapply).observe(titleEl, { subtree: true, characterData: true, childList: true });
+  }
+}
+
 // Ensure initialization runs at the right time
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', init);
@@ -645,48 +836,93 @@ if (document.readyState === 'loading') {
   init();
 }
 
-// Also run on dynamic navigation (for SPA behavior)
-window.addEventListener('load', init);
-window.addEventListener('popstate', init);
-
 // Create the floating modal
 function createModal() {
+  injectPanelStyles();
+
   // Create modal container
   noteModal = document.createElement('div');
   noteModal.id = 'cairn-modal';
-  applyStyles(noteModal, createStyleObject(baseStyles.modal, {
+  applyStyles(noteModal, {
+    position: 'fixed',
     top: '100px',
-    right: '24px', // Changed from 50px
-    width: '300px',
-    minHeight: '100px',
-    maxHeight: '500px',
-    display: 'none' // Start hidden
-  }));
-  
+    right: '24px',
+    width: '380px',
+    maxHeight: 'min(640px, calc(100vh - 140px))',
+    boxSizing: 'border-box',
+    display: 'none', // Start hidden
+    flexDirection: 'column',
+    background: panel.colors.bg,
+    border: `1px solid ${panel.colors.borderStrong}`,
+    borderRadius: '16px',
+    overflow: 'hidden',
+    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+    zIndex: '10000',
+    fontFamily: panel.font.sans,
+    fontSize: '14px',
+    color: panel.colors.text
+  });
+
   // Create modal header
   const modalHeader = document.createElement('div');
   modalHeader.id = 'cairn-header';
-  applyStyles(modalHeader, baseStyles.header);
-  
-  const modalTitle = document.createElement('span');
-  modalTitle.textContent = 'Cairn Notes';
-  applyStyles(modalTitle, {
-    fontWeight: 'bold'
+  applyStyles(modalHeader, {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '16px 12px 14px 16px',
+    flexShrink: '0'
   });
-  
-  const closeButton = document.createElement('button');
-  applyStyles(closeButton, createStyleObject(baseStyles.button, {
+
+  const iconBox = document.createElement('div');
+  applyStyles(iconBox, {
+    width: '34px',
+    height: '34px',
+    borderRadius: '10px',
+    background: panel.colors.iconBg,
+    color: panel.colors.accent,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: '4px'
-  }));
-  closeButton.appendChild(CairnIcons.createIcon('x', 20, styles.colors.text.normal));
+    flexShrink: '0'
+  });
+  const iconBoxImg = document.createElement('img');
+  iconBoxImg.src = chrome.runtime.getURL('images/cairn-stack.png');
+  iconBoxImg.alt = '';
+  applyStyles(iconBoxImg, { width: '20px', height: '20px', objectFit: 'contain', mixBlendMode: 'multiply' });
+  iconBox.appendChild(iconBoxImg);
+
+  const titleBlock = document.createElement('div');
+  applyStyles(titleBlock, { display: 'flex', flexDirection: 'column', gap: '1px', flexGrow: '1', minWidth: '0' });
+
+  const modalTitle = document.createElement('div');
+  modalTitle.textContent = 'Cairn';
+  applyStyles(modalTitle, { fontSize: '15px', fontWeight: '600', letterSpacing: '-0.01em' });
+
+  titleBlock.appendChild(modalTitle);
+
+  const settingsButton = document.createElement('button');
+  settingsButton.className = 'cairn-ib';
+  settingsButton.setAttribute('aria-label', 'Settings');
+  applyStyles(settingsButton, panelIconButtonStyle('36px'));
+  settingsButton.appendChild(CairnIcons.createIcon('settings', 17, panel.colors.subtext));
+  settingsButton.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleSettingsMenu();
+  });
+
+  const closeButton = document.createElement('button');
+  closeButton.className = 'cairn-ib';
+  closeButton.setAttribute('aria-label', 'Close panel');
+  applyStyles(closeButton, panelIconButtonStyle('36px'));
+  closeButton.appendChild(CairnIcons.createIcon('x', 17, panel.colors.subtext));
   closeButton.addEventListener('click', () => {
     noteModal.style.display = 'none';
   });
-  
-  modalHeader.appendChild(modalTitle);
+
+  modalHeader.appendChild(iconBox);
+  modalHeader.appendChild(titleBlock);
+  modalHeader.appendChild(settingsButton);
   modalHeader.appendChild(closeButton);
 
   // Make header draggable — translate3d during drag (compositor), commit left/top on release
@@ -694,7 +930,7 @@ function createModal() {
   modalHeader.style.touchAction = 'none';
 
   function setupModalDrag(startEvent) {
-    if (startEvent.target === closeButton || closeButton.contains(startEvent.target)) return;
+    if (startEvent.target.closest && startEvent.target.closest('button')) return;
     if (startEvent.pointerType === 'mouse' && startEvent.button !== 0) return;
     startEvent.preventDefault();
 
@@ -787,155 +1023,509 @@ function createModal() {
     setupModalDrag(e);
   });
 
-  // Create tab container
-  const tabContainer = document.createElement('div');
-  applyStyles(tabContainer, baseStyles.container);
+  // Tab bar — contents are (re)rendered by renderTabsRow() so badge counts stay live
+  const tabsEl = document.createElement('div');
+  tabsEl.id = 'cairn-tabs';
 
-  // Create tabs
-  const clipsTab = createTabButton('Clips', 'clips');
-  const annotationsTab = createTabButton('Annotations', 'annotations');
-  const commentsTab = createTabButton('Comments', 'comments');
-
-  tabContainer.appendChild(clipsTab);
-  tabContainer.appendChild(annotationsTab);
-  tabContainer.appendChild(commentsTab);
-  
   // Create modal content
   const modalContent = document.createElement('div');
   modalContent.id = 'cairn-content';
-  applyStyles(modalContent, baseStyles.content);
-  
-  // NEW: Create Filter Container (initially hidden)
-  const filterContainer = document.createElement('div');
-  filterContainer.id = 'cairn-filter-container';
-  applyStyles(filterContainer, {
-    display: 'none', // Start hidden
-    // Uniform padding
-    padding: `${styles.spacing.sm} ${styles.spacing.md}`,
-    borderBottom: `1px solid ${styles.colors.border}`,
-    backgroundColor: styles.colors.background.white,
-    alignItems: 'center', // Vertically align items
-    gap: styles.spacing.sm
+  applyStyles(modalContent, {
+    flexGrow: '1',
+    overflowY: 'auto',
+    padding: '14px 16px 16px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+    boxSizing: 'border-box'
   });
 
-  const selectFontSize = '0.9rem'; // Define common font size
-  const selectPadding = styles.spacing.sm; // Define common padding
-
-  const labelSelect = document.createElement('select');
-  labelSelect.id = 'cairn-label-filter-select';
-  applyStyles(labelSelect, {
-    flex: '1', 
-    padding: selectPadding, 
-    fontSize: selectFontSize, // Apply common font size
-    border: `1px solid ${styles.colors.border}`,
-    borderRadius: '4px',
-    boxSizing: 'border-box' // Consistent height calculation
-  });
-  labelSelect.addEventListener('change', () => {
-    currentAnnotationFilter = labelSelect.value || null; // Explicitly null if empty value
-    updateModalContent();
-  });
-
-  const clearFilterButton = document.createElement('button');
-  clearFilterButton.id = 'cairn-clear-filter-button';
-  clearFilterButton.textContent = 'Clear';
-  applyStyles(clearFilterButton, createStyleObject(baseStyles.actionButton, {
-    backgroundColor: styles.colors.text.normal,
-    padding: selectPadding, // Use same padding as select
-    fontSize: selectFontSize, // Apply common font size
-    lineHeight: '1.2', // Adjust line-height for vertical centering if needed
-    boxSizing: 'border-box' // Consistent height calculation
-  }));
-  clearFilterButton.disabled = true;
-  clearFilterButton.addEventListener('click', () => {
-    currentAnnotationFilter = null;
-    labelSelect.value = "";
-    updateModalContent();
-  });
-
-  filterContainer.appendChild(labelSelect);
-  filterContainer.appendChild(clearFilterButton);
-
-  // Create modal actions
+  // Footer actions
   const modalActions = document.createElement('div');
-  applyStyles(modalActions, baseStyles.actions);
-  
-  // Change "View All Notes" from link to button
+  modalActions.id = 'cairn-actions';
+  applyStyles(modalActions, {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '12px 16px',
+    borderTop: `1px solid ${panel.colors.border}`,
+    background: panel.colors.bg,
+    flexShrink: '0',
+    boxSizing: 'border-box'
+  });
+
+  const clearButton = document.createElement('button');
+  clearButton.id = 'cairn-clear-all-button';
+  clearButton.className = 'cairn-danger-btn';
+  clearButton.textContent = 'Clear all';
+  applyStyles(clearButton, {
+    height: '38px',
+    padding: '0 12px',
+    border: '0',
+    borderRadius: '9px',
+    background: 'transparent',
+    color: panel.colors.subtext,
+    font: `500 13px ${panel.font.sans}`,
+    cursor: 'pointer'
+  });
+  clearButton.addEventListener('click', clearAllClips);
+
+  const actionsSpacer = document.createElement('div');
+  applyStyles(actionsSpacer, { flexGrow: '1' });
+
   const viewAllButton = document.createElement('button');
-  viewAllButton.id = 'cairn-view-all-button'; // <<< Add ID
-  viewAllButton.textContent = 'View All Notes';
-  // Apply base action button styles, override background, and center text
-  applyStyles(viewAllButton, createStyleObject(
-    baseStyles.actionButton, 
-    {
-      backgroundColor: styles.colors.primary, // Keep primary color
-      textAlign: 'center', // Center the text within the button
-      padding: '6px 12px 4px 12px',
-    }
-  ));
-  viewAllButton.addEventListener('click', (e) => {
-    // e.preventDefault(); // Not needed for button
+  viewAllButton.id = 'cairn-view-all-button';
+  viewAllButton.className = 'cairn-primary-btn';
+  applyStyles(viewAllButton, {
+    height: '38px',
+    padding: '0 14px',
+    border: '0',
+    borderRadius: '10px',
+    background: panel.colors.accent,
+    color: '#FFFFFF',
+    font: `500 13px ${panel.font.sans}`,
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    cursor: 'pointer'
+  });
+  viewAllButton.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4h11a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6z"></path><path d="M6 4v16M10 8.5h5M10 12.5h5"></path></svg>Open notebook';
+  viewAllButton.addEventListener('click', () => {
     chrome.runtime.sendMessage({ action: 'openLibrary' });
   });
-  
-  const clearButton = document.createElement('button');
-  clearButton.id = 'cairn-clear-all-button'; // <<< Add ID
-  clearButton.textContent = 'Clear All';
-  applyStyles(clearButton, createStyleObject(baseStyles.actionButton, {
-    backgroundColor: '#f44336', // Keep danger color
-    padding: '6px 12px 4px 12px',
-  }));
-  clearButton.addEventListener('click', clearAllClips);
-  
-  // Append buttons
-  modalActions.appendChild(viewAllButton);
+
   modalActions.appendChild(clearButton);
-  
+  modalActions.appendChild(actionsSpacer);
+  modalActions.appendChild(viewAllButton);
+
   // Assemble modal
   noteModal.appendChild(modalHeader);
-  noteModal.appendChild(tabContainer);
-  noteModal.appendChild(filterContainer); // Add filter container here
+  noteModal.appendChild(tabsEl);
   noteModal.appendChild(modalContent);
   noteModal.appendChild(modalActions);
-  
+
   // Add modal to document
   document.body.appendChild(noteModal);
+
+  renderTabsRow({ clips: 0, topics: 0, comments: 0 });
+
+  maybeShowOnboarding();
 }
 
-// Create a tab button
-function createTabButton(text, tabId) {
-  const tab = document.createElement('button');
-  tab.textContent = text;
-  
-  const isActive = activeTab === tabId;
-  applyStyles(tab, createStyleObject(
-    baseStyles.tab,
-    isActive ? baseStyles.tabActive : {}
-  ));
-  
-  tab.addEventListener('click', () => switchTab(tabId));
-  return tab;
+// --- Onboarding (first-launch walkthrough) ---
+// Design reference: ui-updates/Onboarding · first launch-html. Auto-shown once,
+// extension-wide, the first time the full Notes modal is created (Claude or any
+// other site — see createModal()'s maybeShowOnboarding() call). The
+// settings icon in the modal header re-opens it on demand for testing; whether
+// that stays as a permanent access point is a decision for later.
+const ONBOARDING_SEEN_KEY = 'cairnOnboardingSeen';
+
+const ONBOARDING_STEPS = [
+  {
+    kicker: 'Clips',
+    heading: 'Clips keep what matters',
+    body: 'Highlight any passage and save it as a clip. Clips stay with the site you saved them on, and each one links back to its spot in the conversation.',
+    shortcut: { keys: 'C C', label: 'Double-tap C with text selected to clip it instantly.' },
+    claudeOnly: false
+  },
+  {
+    kicker: 'Topics',
+    heading: 'Topics gather your research',
+    body: 'When you’re going deeper, file a clip under a topic. Topics pull clips together across Claude, ChatGPT, Gemini and Grok, so one line of research lives in one place.',
+    shortcut: { keys: 'T T', label: 'Double-tap T with text selected to add it to a topic. Your last topic stays selected.' },
+    claudeOnly: false
+  },
+  {
+    kicker: 'Comments',
+    heading: 'Comments start your next prompt',
+    body: 'Clip a passage and add a note. Both drop into Claude’s message box, ready to send, and the clip is still saved for later.',
+    shortcut: { keys: 'K K', label: 'Double-tap K with text selected to comment.' },
+    claudeOnly: true
+  }
+];
+
+let onboardingStep = 0;
+
+function maybeShowOnboarding() {
+  chrome.storage.local.get([ONBOARDING_SEEN_KEY], (result) => {
+    if (result[ONBOARDING_SEEN_KEY]) return;
+    openOnboardingModal();
+    chrome.storage.local.set({ [ONBOARDING_SEEN_KEY]: true });
+  });
+}
+
+function openOnboardingModal() {
+  if (!document.getElementById('cairn-onboarding-modal')) {
+    createOnboardingModal();
+  }
+  const modal = document.getElementById('cairn-onboarding-modal');
+  modal.style.display = 'flex';
+  renderOnboardingStep(0);
+}
+
+function closeOnboardingModal() {
+  const modal = document.getElementById('cairn-onboarding-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+function createOnboardingModal() {
+  injectPanelStyles();
+
+  const modal = document.createElement('div');
+  modal.id = 'cairn-onboarding-modal';
+  applyStyles(modal, {
+    position: 'fixed',
+    top: '50%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
+    width: '380px',
+    height: '640px',
+    maxHeight: 'calc(100vh - 40px)',
+    boxSizing: 'border-box',
+    display: 'none',
+    flexDirection: 'column',
+    background: panel.colors.bg,
+    border: `1px solid ${panel.colors.borderStrong}`,
+    borderRadius: '16px',
+    overflow: 'hidden',
+    boxShadow: '0 20px 60px rgba(28,38,36,.3)',
+    zIndex: '10003',
+    fontFamily: panel.font.sans,
+    fontSize: '14px',
+    color: panel.colors.text
+  });
+
+  // Header
+  const header = document.createElement('div');
+  applyStyles(header, { display: 'flex', alignItems: 'center', gap: '10px', padding: '16px 12px 10px 16px', flexShrink: '0' });
+
+  const iconBox = document.createElement('div');
+  applyStyles(iconBox, {
+    width: '34px', height: '34px', borderRadius: '10px',
+    background: panel.colors.iconBg, color: panel.colors.accent,
+    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: '0'
+  });
+  const iconImg = document.createElement('img');
+  iconImg.src = chrome.runtime.getURL('images/cairn-stack.png');
+  iconImg.alt = '';
+  applyStyles(iconImg, { width: '20px', height: '20px', objectFit: 'contain', mixBlendMode: 'multiply' });
+  iconBox.appendChild(iconImg);
+
+  const title = document.createElement('div');
+  title.textContent = 'Welcome to Cairn';
+  applyStyles(title, { fontSize: '15px', fontWeight: '600', letterSpacing: '-0.01em', flexGrow: '1' });
+
+  const skipButton = document.createElement('button');
+  skipButton.className = 'cairn-ib';
+  skipButton.textContent = 'Skip';
+  applyStyles(skipButton, {
+    height: '34px', padding: '0 10px', border: '0', borderRadius: '9px',
+    background: 'transparent', color: panel.colors.subtext,
+    font: `500 13px ${panel.font.sans}`, cursor: 'pointer'
+  });
+  skipButton.addEventListener('click', closeOnboardingModal);
+
+  header.appendChild(iconBox);
+  header.appendChild(title);
+  header.appendChild(skipButton);
+
+  // Body — rebuilt per step by renderOnboardingStep()
+  const body = document.createElement('div');
+  body.id = 'cairn-onboarding-body';
+  applyStyles(body, { flexGrow: '1', display: 'flex', flexDirection: 'column', gap: '20px', padding: '10px 20px 0', overflowY: 'auto' });
+
+  // Footer
+  const footer = document.createElement('div');
+  applyStyles(footer, { display: 'flex', alignItems: 'center', gap: '8px', padding: '14px 16px 16px', flexShrink: '0' });
+
+  const progressWrap = document.createElement('div');
+  applyStyles(progressWrap, { display: 'flex', alignItems: 'center', gap: '8px', flexGrow: '1', paddingLeft: '4px' });
+
+  const progressDots = ONBOARDING_STEPS.map(() => {
+    const dot = document.createElement('span');
+    applyStyles(dot, { width: '7px', height: '7px', borderRadius: '50%', background: panel.colors.border, flexShrink: '0' });
+    progressWrap.appendChild(dot);
+    return dot;
+  });
+
+  const stepLabel = document.createElement('span');
+  applyStyles(stepLabel, { fontSize: '12px', color: panel.colors.subtext });
+  progressWrap.appendChild(stepLabel);
+
+  const backButton = document.createElement('button');
+  backButton.className = 'cairn-ib';
+  backButton.textContent = 'Back';
+  applyStyles(backButton, {
+    height: '40px', padding: '0 14px', border: '0', borderRadius: '10px',
+    background: 'transparent', color: panel.colors.subtext2,
+    font: `500 13.5px ${panel.font.sans}`, cursor: 'pointer'
+  });
+  backButton.addEventListener('click', () => renderOnboardingStep(onboardingStep - 1));
+
+  const nextButton = document.createElement('button');
+  nextButton.className = 'cairn-primary-btn';
+  applyStyles(nextButton, {
+    height: '40px', padding: '0 18px', border: '0', borderRadius: '10px',
+    background: panel.colors.accent, color: '#FFFFFF',
+    font: `500 13.5px ${panel.font.sans}`, cursor: 'pointer'
+  });
+  nextButton.addEventListener('click', () => {
+    if (onboardingStep === ONBOARDING_STEPS.length - 1) {
+      closeOnboardingModal();
+    } else {
+      renderOnboardingStep(onboardingStep + 1);
+    }
+  });
+
+  footer.appendChild(progressWrap);
+  footer.appendChild(backButton);
+  footer.appendChild(nextButton);
+
+  modal.appendChild(header);
+  modal.appendChild(body);
+  modal.appendChild(footer);
+  document.body.appendChild(modal);
+
+  modal._onboardingRefs = { body, progressDots, stepLabel, backButton, nextButton };
+}
+
+function renderOnboardingStep(n) {
+  const modal = document.getElementById('cairn-onboarding-modal');
+  if (!modal || !modal._onboardingRefs) return;
+  onboardingStep = Math.max(0, Math.min(ONBOARDING_STEPS.length - 1, n));
+  const step = ONBOARDING_STEPS[onboardingStep];
+  const { body, progressDots, stepLabel, backButton, nextButton } = modal._onboardingRefs;
+
+  body.innerHTML = '';
+  body.appendChild(buildOnboardingPreview(onboardingStep));
+  body.appendChild(buildOnboardingCopy(step));
+
+  progressDots.forEach((dot, i) => {
+    dot.style.background = i <= onboardingStep ? panel.colors.accent : panel.colors.border;
+  });
+  stepLabel.textContent = `${onboardingStep + 1} of ${ONBOARDING_STEPS.length}`;
+  backButton.style.visibility = onboardingStep === 0 ? 'hidden' : 'visible';
+  nextButton.textContent = onboardingStep === ONBOARDING_STEPS.length - 1 ? 'Start clipping' : 'Next';
+}
+
+function buildOnboardingCopy(step) {
+  const wrap = document.createElement('div');
+  applyStyles(wrap, { display: 'flex', flexDirection: 'column', gap: '8px', padding: '0 4px' });
+
+  const kickerRow = document.createElement('div');
+  applyStyles(kickerRow, { display: 'flex', alignItems: 'center', gap: '8px' });
+
+  const kicker = document.createElement('span');
+  kicker.textContent = step.kicker;
+  applyStyles(kicker, { fontSize: '12px', fontWeight: '600', color: panel.colors.accent, letterSpacing: '0.04em', textTransform: 'uppercase' });
+  kickerRow.appendChild(kicker);
+
+  if (step.claudeOnly) {
+    const badge = document.createElement('span');
+    badge.textContent = 'Claude only';
+    applyStyles(badge, { fontSize: '11px', fontWeight: '600', color: panel.colors.subtext, background: '#E6EAE8', borderRadius: '6px', padding: '2px 7px' });
+    kickerRow.appendChild(badge);
+  }
+
+  const heading = document.createElement('h2');
+  heading.textContent = step.heading;
+  applyStyles(heading, { margin: '0', fontSize: '21px', fontWeight: '600', letterSpacing: '-0.015em', lineHeight: '1.25' });
+
+  const body = document.createElement('p');
+  body.textContent = step.body;
+  applyStyles(body, { margin: '0', fontSize: '14px', lineHeight: '1.55', color: panel.colors.subtext });
+
+  wrap.appendChild(kickerRow);
+  wrap.appendChild(heading);
+  wrap.appendChild(body);
+
+  if (step.shortcut) {
+    const tip = document.createElement('div');
+    applyStyles(tip, {
+      display: 'flex', alignItems: 'center', gap: '10px', marginTop: '6px', padding: '10px 12px',
+      background: panel.colors.card, border: `1px solid ${panel.colors.border}`, borderRadius: '10px'
+    });
+    const kbd = document.createElement('kbd');
+    kbd.textContent = step.shortcut.keys;
+    applyStyles(kbd, {
+      font: `500 12px ${panel.font.sans}`, background: panel.colors.bg, whiteSpace: 'nowrap',
+      border: `1px solid ${panel.colors.borderStrong}`, borderRadius: '6px',
+      padding: '2px 7px', color: panel.colors.subtext2
+    });
+    const label = document.createElement('span');
+    label.textContent = step.shortcut.label;
+    applyStyles(label, { fontSize: '13px', lineHeight: '1.4', color: panel.colors.subtext2 });
+    tip.append(kbd, label);
+    wrap.appendChild(tip);
+  }
+  return wrap;
+}
+
+// Illustrative (not literal) preview of each feature, styled with the same
+// tokens as the real modal so it doesn't need its own asset.
+function buildOnboardingPreview(stepIndex) {
+  const box = document.createElement('div');
+  applyStyles(box, {
+    height: '236px', boxSizing: 'border-box', flexShrink: '0',
+    background: '#EDF2EF', borderRadius: '14px', padding: '20px',
+    display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '10px'
+  });
+
+  if (stepIndex === 0) {
+    const pill = document.createElement('div');
+    applyStyles(pill, {
+      alignSelf: 'center', display: 'flex', alignItems: 'center', gap: '6px',
+      background: panel.colors.text, color: '#FFFFFF', fontSize: '12px', fontWeight: '500',
+      padding: '6px 10px', borderRadius: '8px', boxShadow: '0 4px 12px rgba(28,38,36,.18)'
+    });
+    pill.appendChild(CairnIcons.createIcon('copy', 13, '#FFFFFF'));
+    pill.appendChild(document.createTextNode('Clip'));
+
+    const card = document.createElement('p');
+    card.style.margin = '0';
+    applyStyles(card, { background: '#FFFFFF', borderRadius: '10px', padding: '14px', fontFamily: panel.font.serif, fontSize: '15px', lineHeight: '1.55', color: panel.colors.subtext });
+    card.innerHTML = 'Most answers have one paragraph worth keeping. <span style="background:#CFE3DB;color:#1C2624;border-radius:3px;padding:1px 2px;">Select it and clip it</span> — the rest of the reply stays where it is.';
+
+    box.appendChild(pill);
+    box.appendChild(card);
+  } else if (stepIndex === 1) {
+    const pillRow = document.createElement('div');
+    applyStyles(pillRow, { display: 'flex', gap: '6px' });
+    ['Roadmap', 'Onboarding', 'Caching'].forEach((name, i) => {
+      const pill = document.createElement('span');
+      pill.textContent = name;
+      applyStyles(pill, {
+        fontSize: '12px', fontWeight: '500', padding: '5px 11px', borderRadius: '14px',
+        background: i === 0 ? panel.colors.accent : '#FFFFFF',
+        color: i === 0 ? '#FFFFFF' : panel.colors.subtext2,
+        border: i === 0 ? 'none' : `1px solid ${panel.colors.borderStrong}`
+      });
+      pillRow.appendChild(pill);
+    });
+
+    const sources = [
+      { name: 'Claude', color: panel.sourceColors.Claude, text: 'Cache invalidation is the hard half — writes need a plan, not just a TTL.' },
+      { name: 'Grok', color: panel.sourceColors.Grok, text: 'Start with a TTL cache; add invalidation once you feel the staleness.' }
+    ];
+    const sourceStack = document.createElement('div');
+    applyStyles(sourceStack, { display: 'flex', flexDirection: 'column', gap: '8px' });
+    sources.forEach((s) => {
+      const card = document.createElement('div');
+      applyStyles(card, { background: '#FFFFFF', borderRadius: '10px', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '4px' });
+      const label = document.createElement('div');
+      applyStyles(label, { display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', fontWeight: '600', color: panel.colors.subtext2 });
+      const dot = document.createElement('span');
+      applyStyles(dot, { width: '7px', height: '7px', borderRadius: '50%', background: s.color, flexShrink: '0' });
+      label.appendChild(dot);
+      label.appendChild(document.createTextNode(s.name));
+      const text = document.createElement('div');
+      text.textContent = s.text;
+      applyStyles(text, { fontFamily: panel.font.serif, fontSize: '14px', lineHeight: '1.4' });
+      card.appendChild(label);
+      card.appendChild(text);
+      sourceStack.appendChild(card);
+    });
+
+    box.appendChild(pillRow);
+    box.appendChild(sourceStack);
+  } else {
+    const card = document.createElement('div');
+    applyStyles(card, { background: '#FFFFFF', borderRadius: '12px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '10px', boxShadow: '0 1px 2px rgba(28,38,36,.06)' });
+
+    const quote = document.createElement('div');
+    quote.textContent = '“Rewrite this section in plain English.”';
+    applyStyles(quote, { background: panel.colors.replyBg, borderRadius: '8px', padding: '9px 11px', fontFamily: panel.font.serif, fontStyle: 'italic', fontSize: '14px', lineHeight: '1.4', color: panel.colors.subtext });
+
+    const comment = document.createElement('div');
+    comment.textContent = 'Can you say this without the jargon?';
+    applyStyles(comment, { fontSize: '14px', lineHeight: '1.45', color: panel.colors.text });
+
+    const sendRow = document.createElement('div');
+    applyStyles(sendRow, { display: 'flex', justifyContent: 'flex-end' });
+    const sendBtn = document.createElement('span');
+    applyStyles(sendBtn, { width: '30px', height: '30px', borderRadius: '9px', background: panel.colors.accent, color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center' });
+    sendBtn.appendChild(CairnIcons.createIcon('arrowUp', 15, '#FFFFFF'));
+    sendRow.appendChild(sendBtn);
+
+    card.appendChild(quote);
+    card.appendChild(comment);
+    card.appendChild(sendRow);
+    box.appendChild(card);
+  }
+
+  return box;
+}
+
+// Rebuilds the segmented tab bar (#cairn-tabs) with live badge counts.
+function renderTabsRow(counts) {
+  const tabsEl = document.getElementById('cairn-tabs');
+  if (!tabsEl) return;
+  tabsEl.innerHTML = '';
+
+  const defs = [
+    { id: 'clips', label: 'Clips', count: counts.clips },
+    { id: 'annotations', label: 'Topics', count: counts.topics }
+  ];
+  // Comments are a Claude-only feature — no tab on other sites.
+  if (!isWebClipMode()) {
+    defs.push({ id: 'comments', label: 'Comments', count: counts.comments });
+  }
+
+  applyStyles(tabsEl, {
+    margin: '0 16px',
+    padding: '3px',
+    background: panel.colors.tabTrack,
+    borderRadius: '11px',
+    display: 'grid',
+    gridTemplateColumns: `repeat(${defs.length}, minmax(0, 1fr))`,
+    gap: '2px',
+    flexShrink: '0'
+  });
+
+  defs.forEach((t) => {
+    const on = t.id === activeTab;
+    const btn = document.createElement('button');
+    applyStyles(btn, {
+      height: '34px',
+      border: '0',
+      borderRadius: '8px',
+      font: `500 13px ${panel.font.sans}`,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '6px',
+      cursor: 'pointer',
+      transition: 'background .15s, color .15s',
+      background: on ? '#FFFFFF' : 'transparent',
+      color: on ? panel.colors.text : panel.colors.subtext,
+      boxShadow: on ? '0 1px 2px rgba(28,38,36,.08), 0 0 0 1px rgba(28,38,36,.04)' : 'none'
+    });
+    btn.textContent = t.label;
+
+    if (t.count > 0) {
+      const badge = document.createElement('span');
+      badge.textContent = String(t.count);
+      applyStyles(badge, {
+        fontSize: '11px',
+        fontWeight: '600',
+        minWidth: '18px',
+        padding: '1px 5px',
+        boxSizing: 'border-box',
+        borderRadius: '9px',
+        background: on ? panel.colors.tabBadgeOn : panel.colors.tabBadgeOff,
+        color: on ? panel.colors.accent : panel.colors.subtext
+      });
+      btn.appendChild(badge);
+    }
+
+    btn.addEventListener('click', () => switchTab(t.id));
+    tabsEl.appendChild(btn);
+  });
 }
 
 // Switch between tabs
 function switchTab(tabId) {
   activeTab = tabId;
-
-  const tabLabels = { clips: 'Clips', annotations: 'Annotations', comments: 'Comments' };
-
-  // Update tab styles
-  const tabs = noteModal.querySelectorAll('button');
-  tabs.forEach(tab => {
-    if (tab.textContent === tabLabels[tabId]) {
-      tab.style.fontWeight = 'bold';
-      tab.style.borderBottom = `2px solid ${styles.colors.primary}`;
-    } else {
-      tab.style.fontWeight = 'normal';
-      tab.style.borderBottom = '2px solid transparent';
-    }
-  });
-
-  // Update content
   updateModalContent();
 }
 
@@ -1003,7 +1593,6 @@ function findMessageContainer(node) {
   if (window.location.href.includes('claude.ai/chat')) {
     // Check if we're near any text that looks like a message
     if (node && node.textContent && node.textContent.length > 50) {
-      console.log('Found potential generic message container');
       return node;
     }
   }
@@ -1018,7 +1607,7 @@ function isSelectionInsideIgnoredUi(selection) {
   while (ancestor && ancestor !== document.body) {
     if (ancestor.nodeType === Node.ELEMENT_NODE &&
         (ancestor.id === 'cairn-modal' || ancestor.id === 'cairn-annotation-modal' ||
-         ancestor.id === 'cairn-comment-popover' ||
+         ancestor.id === 'cairn-comment-popover' || ancestor.id === 'cairn-onboarding-modal' ||
          ancestor.getAttribute?.('data-testid') === 'chat-input')) {
       return true;
     }
@@ -1056,17 +1645,24 @@ function flashClipButtonSaved() {
     return;
   }
   clipButton.textContent = 'Saved!';
-  clipButton.style.backgroundColor = '#4CAF50';
+  clipButton.style.background = '#24574D';
   setTimeout(() => removeFloatingClipButtons(), 1000);
 }
 
-// Double-tap C with an active selection clips the text (same as Clip button).
-// Claude often steals focus to the composer on keypress — judge by where the
-// selection lives, not activeElement. Capture-phase + preventDefault keeps "c"
-// out of the chat box when we're claiming the shortcut.
+// Double-tap shortcuts with an active selection: C = Clip, T = Add to Topic,
+// K = Comment (Claude only). Claude often steals focus to the composer on
+// keypress — judge by where the selection lives, not activeElement. Capture-phase
+// + preventDefault keeps the letter out of the chat box when we claim the shortcut.
 function handleClipDoubleTapShortcut(e) {
   if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
-  if (e.key.toLowerCase() !== 'c') {
+  const key = e.key.toLowerCase();
+  const isCommentKey = key === 'k';
+  if (key !== 'c' && key !== 't' && !isCommentKey) {
+    lastClipShortcutTime = 0;
+    return;
+  }
+  // Comments are Claude-only
+  if (isCommentKey && isWebClipMode()) {
     lastClipShortcutTime = 0;
     return;
   }
@@ -1086,81 +1682,208 @@ function handleClipDoubleTapShortcut(e) {
 
   const isCodeBlock = isSelectionInCodeBlock(selection);
   const range = selection.getRangeAt(0);
-  const container = findMessageContainer(range.commonAncestorContainer);
-  if (!container && !isCodeBlock) {
-    lastClipShortcutTime = 0;
-    return;
+  // Claude: only act on message/code selections. Web: any page selection.
+  if (!isWebClipMode()) {
+    const container = findMessageContainer(range.commonAncestorContainer);
+    if (!container && !isCodeBlock) {
+      lastClipShortcutTime = 0;
+      return;
+    }
   }
 
-  // Claim the key so it does not land in the chat composer
+  // Claim the key so it does not land in the chat composer / page inputs
   e.preventDefault();
   e.stopPropagation();
 
   const now = Date.now();
-  if (now - lastClipShortcutTime <= CLIP_SHORTCUT_DOUBLE_TAP_MS) {
+  if (key === lastClipShortcutKey && now - lastClipShortcutTime <= CLIP_SHORTCUT_DOUBLE_TAP_MS) {
     lastClipShortcutTime = 0;
-    console.log('Cairn clip shortcut: double-tap matched — saving clip');
-    saveClip(selection, isCodeBlock, false);
-    flashClipButtonSaved();
+    lastClipShortcutKey = '';
+    if (key === 'c') {
+      saveClip(selection, isCodeBlock, false, true);
+      flashClipButtonSaved();
+      showCairnToast('Clip saved', 'clips');
+    } else if (key === 't') {
+      removeFloatingClipButtons();
+      openAnnotationModal(selection, isCodeBlock, true);
+    } else {
+      const rect = range.getBoundingClientRect();
+      removeFloatingClipButtons();
+      openCommentPopover(selectedText, rect, range.cloneRange());
+    }
     return;
   }
 
   lastClipShortcutTime = now;
-  console.log('Cairn clip shortcut: first tap recorded');
+  lastClipShortcutKey = key;
+}
+
+// Open the Notes modal on a given tab (used by the toast's action link)
+function openNotesModal(tabId) {
+  if (!noteModal) return;
+  if (tabId) activeTab = tabId;
+  noteModal.style.display = 'flex';
+  updateModalContent();
+  applyModalPosition();
+}
+
+// Small top-right confirmation for shortcut saves, with a link into the Notes modal.
+// Skipped when the modal is already open (it already shows the new item).
+let cairnToastTimer = null;
+function showCairnToast(message, tabId) {
+  if (noteModal && noteModal.style.display !== 'none') return;
+  injectPanelStyles();
+  const existing = document.getElementById('cairn-toast');
+  if (existing) existing.remove();
+  clearTimeout(cairnToastTimer);
+
+  const toast = document.createElement('div');
+  toast.id = 'cairn-toast';
+  toast.setAttribute('role', 'status');
+  applyStyles(toast, {
+    position: 'fixed', top: '20px', right: '20px', zIndex: '10003',
+    display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 10px 10px 14px',
+    background: panel.colors.bg, color: panel.colors.text,
+    border: `1px solid ${panel.colors.borderStrong}`, borderRadius: '12px',
+    boxShadow: '0 12px 32px rgba(28,38,36,.12)',
+    font: `500 13px ${panel.font.sans}`
+  });
+  const text = document.createElement('span');
+  text.textContent = message;
+  const link = document.createElement('button');
+  link.type = 'button';
+  link.className = 'cairn-ghost-btn';
+  link.textContent = 'Open notes';
+  applyStyles(link, {
+    height: '30px', padding: '0 10px', border: '0', borderRadius: '8px', background: 'transparent',
+    color: panel.colors.accent, font: `600 13px ${panel.font.sans}`, cursor: 'pointer'
+  });
+  const dismiss = () => { toast.remove(); clearTimeout(cairnToastTimer); };
+  link.addEventListener('click', () => { dismiss(); openNotesModal(tabId); });
+  toast.append(text, link);
+  document.body.appendChild(toast);
+
+  const arm = () => { cairnToastTimer = setTimeout(dismiss, 4000); };
+  toast.addEventListener('mouseenter', () => clearTimeout(cairnToastTimer));
+  toast.addEventListener('mouseleave', arm);
+  arm();
+}
+
+// Small settings menu anchored under the header's settings icon: a toggle for the
+// floating selection buttons, and a way back into the onboarding walkthrough.
+function toggleSettingsMenu() {
+  const existing = document.getElementById('cairn-settings-menu');
+  if (existing) {
+    existing.remove();
+    return;
+  }
+  if (!noteModal) return;
+
+  const menu = document.createElement('div');
+  menu.id = 'cairn-settings-menu';
+  applyStyles(menu, {
+    position: 'absolute', top: '58px', right: '12px', width: '280px', zIndex: '5',
+    boxSizing: 'border-box', padding: '6px', background: panel.colors.card,
+    border: `1px solid ${panel.colors.borderStrong}`, borderRadius: '12px',
+    boxShadow: '0 12px 32px rgba(28,38,36,.16)', fontFamily: panel.font.sans, color: panel.colors.text
+  });
+
+  // Toggle row: description on the left, switch on the right
+  const toggleRow = document.createElement('div');
+  applyStyles(toggleRow, {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '10px'
+  });
+  const textBlock = document.createElement('div');
+  applyStyles(textBlock, { display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '0' });
+  const toggleTitle = document.createElement('span');
+  toggleTitle.textContent = 'Show buttons on highlight';
+  applyStyles(toggleTitle, { fontSize: '13px', fontWeight: '600' });
+  const toggleDesc = document.createElement('span');
+  toggleDesc.textContent = 'Show Clip, Topic and Comment buttons when you select text. Shortcuts (C C, T T, K K) work either way.';
+  applyStyles(toggleDesc, { fontSize: '12px', lineHeight: '1.4', color: panel.colors.subtext });
+  textBlock.append(toggleTitle, toggleDesc);
+
+  const track = document.createElement('button');
+  track.type = 'button';
+  track.setAttribute('role', 'switch');
+  applyStyles(track, {
+    width: '34px', height: '18px', borderRadius: '9px', border: '0', padding: '0',
+    position: 'relative', cursor: 'pointer', transition: 'background-color 0.2s', flexShrink: '0'
+  });
+  const thumb = document.createElement('div');
+  applyStyles(thumb, {
+    width: '14px', height: '14px', borderRadius: '50%', background: '#fff',
+    position: 'absolute', top: '2px', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+  });
+  track.appendChild(thumb);
+  const renderToggle = () => {
+    track.setAttribute('aria-checked', showSelectionButtons ? 'true' : 'false');
+    track.style.background = showSelectionButtons ? panel.colors.accent : panel.colors.borderStrong;
+    thumb.style.left = showSelectionButtons ? '18px' : '2px';
+  };
+  renderToggle();
+  track.addEventListener('click', () => {
+    showSelectionButtons = !showSelectionButtons;
+    chrome.storage.local.set({ [SHOW_SELECTION_BUTTONS_KEY]: showSelectionButtons });
+    if (!showSelectionButtons) removeFloatingClipButtons();
+    renderToggle();
+  });
+  toggleRow.append(textBlock, track);
+
+  const divider = document.createElement('div');
+  applyStyles(divider, { height: '1px', background: panel.colors.border, margin: '2px 6px' });
+
+  const onboardingRow = document.createElement('button');
+  onboardingRow.type = 'button';
+  onboardingRow.className = 'cairn-ib';
+  onboardingRow.textContent = 'View onboarding again';
+  applyStyles(onboardingRow, {
+    width: '100%', textAlign: 'left', padding: '10px', border: '0', borderRadius: '8px',
+    background: 'transparent', color: panel.colors.text, cursor: 'pointer',
+    font: `500 13px ${panel.font.sans}`
+  });
+  onboardingRow.addEventListener('click', () => {
+    closeMenu();
+    openOnboardingModal();
+  });
+
+  menu.append(toggleRow, divider, onboardingRow);
+  noteModal.appendChild(menu);
+
+  const onOutside = (e) => {
+    if (!menu.contains(e.target) && !e.target.closest?.('[aria-label="Settings"]')) closeMenu();
+  };
+  function closeMenu() {
+    menu.remove();
+    document.removeEventListener('mousedown', onOutside, true);
+  }
+  document.addEventListener('mousedown', onOutside, true);
 }
 
 function handleTextSelection(e) {
+  if (!showSelectionButtons) return;
   const selection = window.getSelection();
-  const selectedText = selection.toString().trim(); // Get trimmed text first
-
-  // Remove clip buttons if no text is selected or if selection is cleared
-  const existingButtonContainer = document.querySelector('div[style*="position: absolute"][id*="cairn-clip-button"]'); // Find container
-  if (!selectedText) {
-    if (existingButtonContainer) {
-        document.body.removeChild(existingButtonContainer);
-    }
-    return;
-  }
+  const selectedText = selection.toString().trim();
+  if (!selectedText) return;
 
   // Prevent clipping inside extension UI or the chat composer
-  if (isSelectionInsideIgnoredUi(selection)) {
-    console.log('Selection is inside the Cairn Notes modal, ignoring.');
-    if (existingButtonContainer) {
-      document.body.removeChild(existingButtonContainer);
-    }
-    return;
-  }
+  if (isSelectionInsideIgnoredUi(selection)) return;
 
-  console.log('Text selected:', selectedText);
-  
   const isCodeBlock = isSelectionInCodeBlock(selection);
-  console.log('Is code block:', isCodeBlock);
-  
-  // Check if selection is within a Claude message
   const range = selection.getRangeAt(0);
-  const container = findMessageContainer(range.commonAncestorContainer);
-  
-  if (container || isCodeBlock) {
-    if (isCodeBlock) {
-      console.log('Creating clip button for code block selection');
-    } else {
-      console.log('Creating clip button for regular text selection');
-    }
-    
-    // Create clip button near selection if it doesn't exist
-    if (!document.getElementById('cairn-clip-button')) {
-      createClipButton(selection, isCodeBlock);
-    } else {
-      // Update position of existing button
-      updateClipButtonPosition(selection);
-    }
-  } else {
-    console.log('No message container or code block found for selection');
+  const canClip = isWebClipMode()
+    || isCodeBlock
+    || !!findMessageContainer(range.commonAncestorContainer);
+
+  // Create clip button near selection if it doesn't exist
+  if (canClip && !document.getElementById('cairn-clip-button')) {
+    createClipButton(selection, isCodeBlock);
   }
 }
 
 // Create a clip button near the selected text
 function createClipButton(selection, isCodeBlock) {
+  injectPanelStyles();
   // Remove any existing buttons first
   const existingButton = document.getElementById('cairn-clip-button');
   const existingSecondButton = document.getElementById('cairn-second-clip-button');
@@ -1189,19 +1912,22 @@ function createClipButton(selection, isCodeBlock) {
   // Secondary clip button
   const secondClipButton = document.createElement('button');
   secondClipButton.id = 'cairn-second-clip-button';
-  secondClipButton.textContent = 'Annotate';
+  secondClipButton.textContent = 'Add to Topic';
   applyButtonStyles(secondClipButton, 'secondary');
 
-  // Comment button
-  const commentButton = document.createElement('button');
-  commentButton.id = 'cairn-comment-button';
-  commentButton.textContent = 'Comment';
-  applyButtonStyles(commentButton, 'secondary');
+  // Comment button (Claude only — web mode has no highlights/comments)
+  let commentButton = null;
+  if (!isWebClipMode()) {
+    commentButton = document.createElement('button');
+    commentButton.id = 'cairn-comment-button';
+    commentButton.textContent = 'Comment';
+    applyButtonStyles(commentButton, 'secondary');
+  }
 
   clipButton.addEventListener('click', () => {
     saveClip(selection, isCodeBlock, false);
     clipButton.textContent = 'Saved!';
-    clipButton.style.backgroundColor = '#4CAF50';
+    clipButton.style.background = '#24574D';
     setTimeout(() => {
         // Find the container to remove
         const buttonContainer = clipButton.closest('div[style*="position: absolute"]');
@@ -1222,17 +1948,21 @@ function createClipButton(selection, isCodeBlock) {
 
   const capturedText = selection.toString().trim();
   const capturedRange = selection.rangeCount > 0 ? selection.getRangeAt(0).cloneRange() : null;
-  commentButton.addEventListener('click', () => {
-    openCommentPopover(capturedText, rect, capturedRange);
-    const buttonContainer = commentButton.closest('div[style*="position: absolute"]');
-    if (buttonContainer && document.body.contains(buttonContainer)) {
-      document.body.removeChild(buttonContainer);
-    }
-  });
+  if (commentButton) {
+    commentButton.addEventListener('click', () => {
+      openCommentPopover(capturedText, rect, capturedRange);
+      const buttonContainer = commentButton.closest('div[style*="position: absolute"]');
+      if (buttonContainer && document.body.contains(buttonContainer)) {
+        document.body.removeChild(buttonContainer);
+      }
+    });
+  }
 
   buttonContainer.appendChild(clipButton);
   buttonContainer.appendChild(secondClipButton);
-  buttonContainer.appendChild(commentButton);
+  if (commentButton) {
+    buttonContainer.appendChild(commentButton);
+  }
   document.body.appendChild(buttonContainer);
 
   // Remove clip buttons when clicking elsewhere or after a timeout
@@ -1247,18 +1977,6 @@ function createClipButton(selection, isCodeBlock) {
   
   document.addEventListener('mousedown', removeClipButtons);
   setTimeout(() => removeClipButtons(), 5000);
-}
-
-// Update the clip button position when selection changes
-function updateClipButtonPosition(selection) {
-  const clipButton = document.getElementById('cairn-clip-button');
-  if (!clipButton) return;
-  
-  const range = selection.getRangeAt(0);
-  const rect = range.getBoundingClientRect();
-  
-  clipButton.style.left = `${rect.left + window.scrollX}px`;
-  clipButton.style.top = `${rect.bottom + window.scrollY + 8}px`;
 }
 
 // Add this new function to recalculate clip IDs
@@ -1347,9 +2065,7 @@ function deleteComment(commentId) {
   comments = comments.filter(c => c.id !== commentId);
   allClips[currentConversationId].comments = comments;
   allClips[currentConversationId].lastUpdated = new Date().toISOString();
-  chrome.storage.local.set({ 'cairnNotesV2': allClips }, () => {
-    console.log('Cairn:Comment deleted from conversation', currentConversationId);
-  });
+  chrome.storage.local.set({ 'cairnNotesV2': allClips });
   updateModalContent();
 }
 
@@ -1372,106 +2088,94 @@ function deleteClip(clipId) {
     allClips[currentConversationId].lastUpdated = new Date().toISOString();
     
     // Update storage
-    chrome.storage.local.set({ 'cairnNotesV2': allClips }, () => {
-        console.log('Cairn:Clip deleted from conversation', currentConversationId);
-    });
+    chrome.storage.local.set({ 'cairnNotesV2': allClips });
     
     // Update modal
     updateModalContent();
 }
 
 // Modify the saveClip function
-function saveClip(selection, isCodeBlock, isSecondary) {
-    const selectedText = selection.toString().trim();
-    if (!selectedText) return;
-    
-    console.log('Saving clip, isCodeBlock:', isCodeBlock, 'isSecondary:', isSecondary);
-    
-    const originalRange = selection.getRangeAt(0);
-    const startContainer = originalRange.startContainer;
-    const endContainer = originalRange.endContainer;
+// Block elements we potentially split multi-paragraph selections into.
+const SPLITTABLE_BLOCK_ELEMENTS = ['P', 'LI', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE'];
 
-    // Define block elements we want to potentially split into separate clips
-    const splittableBlockElements = ['P', 'LI', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE'];
-
-    // Find the nearest block element ancestors for start and end
-    let startBlock = startContainer;
-    while (startBlock && startBlock.nodeType !== Node.ELEMENT_NODE) { startBlock = startBlock.parentNode; } // Ensure startBlock is an element
-    while (startBlock && !splittableBlockElements.includes(startBlock.nodeName) && startBlock !== document.body) {
+// If `range` spans more than one splittable block element, returns the deduped
+// list of intersecting blocks (outermost only, e.g. a <blockquote> wins over its
+// child <p>). Returns an empty array for single-block/inline selections.
+// Shared by saveClip and openAnnotationModal so both persist multi-element
+// clips the same way (see createMultiElementClip / applyHighlights).
+function findIntersectingBlocks(range) {
+    let startBlock = range.startContainer;
+    while (startBlock && startBlock.nodeType !== Node.ELEMENT_NODE) { startBlock = startBlock.parentNode; }
+    while (startBlock && !SPLITTABLE_BLOCK_ELEMENTS.includes(startBlock.nodeName) && startBlock !== document.body) {
         startBlock = startBlock.parentNode;
     }
-    if (startBlock === document.body) startBlock = null; // Didn't find a valid block ancestor
+    if (startBlock === document.body) startBlock = null;
 
-    let endBlock = endContainer;
-    while (endBlock && endBlock.nodeType !== Node.ELEMENT_NODE) { endBlock = endBlock.parentNode; } // Ensure endBlock is an element
-    while (endBlock && !splittableBlockElements.includes(endBlock.nodeName) && endBlock !== document.body) {
+    let endBlock = range.endContainer;
+    while (endBlock && endBlock.nodeType !== Node.ELEMENT_NODE) { endBlock = endBlock.parentNode; }
+    while (endBlock && !SPLITTABLE_BLOCK_ELEMENTS.includes(endBlock.nodeName) && endBlock !== document.body) {
         endBlock = endBlock.parentNode;
     }
-    if (endBlock === document.body) endBlock = null; // Didn't find a valid block ancestor
+    if (endBlock === document.body) endBlock = null;
 
-    // Check if selection spans multiple distinct splittable block elements
     const spansMultipleBlocks = startBlock && endBlock && startBlock !== endBlock;
+    if (!spansMultipleBlocks) return [];
 
-    if (spansMultipleBlocks) {
-        console.log('Selection spans multiple blocks, attempting to split...');
-        const allBlocksInRange = [];
-        let currentBlock = startBlock;
+    let searchRoot = range.commonAncestorContainer;
+    while (searchRoot && searchRoot.nodeType !== Node.ELEMENT_NODE) { searchRoot = searchRoot.parentNode; }
+    if (!searchRoot) searchRoot = document.body;
 
-        // Find the common ancestor to constrain the search
-        const commonAncestor = originalRange.commonAncestorContainer;
-        let searchRoot = commonAncestor;
-        while(searchRoot && searchRoot.nodeType !== Node.ELEMENT_NODE) { searchRoot = searchRoot.parentNode; }
-        if (!searchRoot) searchRoot = document.body; // Fallback
+    const potentialBlocks = Array.from(searchRoot.querySelectorAll(SPLITTABLE_BLOCK_ELEMENTS.join(', ')));
+    const intersectingBlocks = potentialBlocks.filter(block =>
+        range.intersectsNode(block) &&
+        SPLITTABLE_BLOCK_ELEMENTS.includes(block.nodeName)
+    );
+    return intersectingBlocks.filter(
+        block => !intersectingBlocks.some(other => other !== block && other.contains(block))
+    );
+}
 
-        // Get all potential block elements within the common ancestor
-        const potentialBlocks = Array.from(searchRoot.querySelectorAll(splittableBlockElements.join(', ')));
-        
-        // Filter to get only the blocks intersecting the original range,
-        // then remove descendants to avoid double-processing (e.g. <blockquote>
-        // and its child <p> both matching).
-        const intersectingBlocks = potentialBlocks.filter(block =>
-            originalRange.intersectsNode(block) &&
-            splittableBlockElements.includes(block.nodeName)
-        );
-        const dedupedBlocks = intersectingBlocks.filter(
-            block => !intersectingBlocks.some(other => other !== block && other.contains(block))
-        );
+// quiet = don't pop the Notes modal open afterwards (used by keyboard shortcuts, which show a toast instead)
+function saveClip(selection, isCodeBlock, isSecondary, quiet = false) {
+    const selectedText = selection.toString().trim();
+    if (!selectedText) return;
 
-        if (dedupedBlocks.length > 0) {
-            // Create one clip that represents the entire multi-element selection.
-            // All blocks are tagged with the same clip ID so they are managed as a unit.
-            const clip = createMultiElementClip(dedupedBlocks, selectedText, isCodeBlock, isSecondary, currentClipId);
-            clips.push(clip);
-            dedupedBlocks.forEach(block => {
-              const r = document.createRange();
-              r.selectNodeContents(block);
-              highlightClipText(r, clip.id, isSecondary);
-            });
-            currentClipId++;
-            updateStorageAndUI();
-        } else {
-            console.warn("Multi-block selection detected, but no splittable blocks found. Saving as single block.");
-            handleSingleBlockSave(originalRange, selectedText, isCodeBlock, isSecondary);
+    const originalRange = selection.getRangeAt(0);
+    const dedupedBlocks = findIntersectingBlocks(originalRange);
+
+    if (dedupedBlocks.length > 0) {
+        // Create one clip that represents the entire multi-element selection.
+        // All blocks are tagged with the same clip ID so they are managed as a unit.
+        const clip = createMultiElementClip(dedupedBlocks, selectedText, isCodeBlock, isSecondary, currentClipId);
+        if (!supportsElementHighlights()) {
+          clip.range = null;
         }
-
+        clips.push(clip);
+        if (supportsElementHighlights()) {
+          dedupedBlocks.forEach(block => {
+            const r = document.createRange();
+            r.selectNodeContents(block);
+            highlightClipText(r, clip.id, isSecondary);
+          });
+        }
+        currentClipId++;
+        updateStorageAndUI(quiet);
     } else {
         // Handle non-list/non-multi-paragraph selections (single block)
-        console.log('Selection is within a single block or not splittable, saving as single clip.');
-        handleSingleBlockSave(originalRange, selectedText, isCodeBlock, isSecondary);
+        handleSingleBlockSave(originalRange, selectedText, isCodeBlock, isSecondary, quiet);
     }
 }
 
 // Helper function to create a clip object (refactored)
-function createClipObject(range, text, isCodeBlock, isSecondary, id, isList = false) {
+function createClipObject(range, text, isCodeBlock, isSecondary, id) {
     return {
         id: id,
         text: text,
         timestamp: new Date().toISOString(),
-        range: getRangeInfo(range), // Make sure getRangeInfo handles the specific range correctly
+        range: supportsElementHighlights() ? getRangeInfo(range) : null,
         url: window.location.href,
         isCode: isCodeBlock,
-        isSecondary: isSecondary,
-        isList: isList
+        isSecondary: isSecondary
     };
 }
 
@@ -1486,7 +2190,6 @@ function createMultiElementClip(blocks, text, isCodeBlock, isSecondary, id) {
         url: window.location.href,
         isCode: isCodeBlock,
         isSecondary,
-        isList: false,
         range: {
             isMultiElement: true,
             elements: blocks.map(el => ({
@@ -1500,33 +2203,39 @@ function createMultiElementClip(blocks, text, isCodeBlock, isSecondary, id) {
 }
 
 // Helper function to handle saving a single block/non-list clip (refactored)
-function handleSingleBlockSave(range, text, isCodeBlock, isSecondary) {
+function handleSingleBlockSave(range, text, isCodeBlock, isSecondary, quiet = false) {
     const clip = createClipObject(range, text, isCodeBlock, isSecondary, currentClipId);
     clips.push(clip);
     currentClipId++;
-    highlightText(range, clip.id, clip.isCode, clip.isSecondary);
+    if (supportsElementHighlights()) {
+      highlightText(range, clip.id, clip.isCode, clip.isSecondary);
+    }
     // Update storage and UI after saving
-    updateStorageAndUI();
+    updateStorageAndUI(quiet);
 }
 
 // Refactored update logic
-function updateStorageAndUI() {
+function updateStorageAndUI(quiet = false) {
+    ensureBucket();
     allClips[currentConversationId].clips = clips;
+    allClips[currentConversationId].title = conversationTitle;
     allClips[currentConversationId].lastUpdated = new Date().toISOString();
     
-    chrome.storage.local.set({ 'cairnNotesV2': allClips }, () => {
-        console.log('Cairn:Clip(s) saved/updated in conversation', currentConversationId);
-    });
-    
+    chrome.storage.local.set({ 'cairnNotesV2': allClips });
+
     updateModalContent();
-    if (noteModal) {
+    if (noteModal && !quiet) {
         noteModal.style.display = 'flex';
     }
 }
 
 // Get information about a range that can be stored
 function getRangeInfo(range) {
-  const container = findMessageContainer(range.commonAncestorContainer);
+  // Claude gates on being inside a recognized message container; ChatGPT/Grok
+  // have no such wrapper to detect, so any selection on the page qualifies.
+  const container = isClaudeSite()
+    ? findMessageContainer(range.commonAncestorContainer)
+    : range.commonAncestorContainer;
   if (!container) return null;
   
   // Get the actual element containing the START of the selection range
@@ -1559,52 +2268,19 @@ function getRangeInfo(range) {
        return null; 
   }
 
-  // Get element context
+  // Restore matches by tag + elementText + occurrenceIndex (see applyHighlights)
   const elementContext = {
     type: element.tagName.toLowerCase(),
-    classes: Array.from(element.classList || []).join(' '),
     elementText: element.textContent.trim(),
     occurrenceIndex: getElementOccurrenceIndex(element),
-    parentType: element.parentNode ? element.parentNode.tagName.toLowerCase() : null,
-    parentClasses: element.parentNode ? Array.from(element.parentNode.classList || []).join(' ') : '',
-    isHeading: element.tagName.match(/^H[1-6]$/i) ? true : false,
-    headingLevel: element.tagName.match(/^H([1-6])$/i)?.[1] || null,
-    isList: element.tagName === 'LI',
-    listType: element.closest('ul, ol')?.tagName.toLowerCase() || null,
-    listContext: null // Initialize as null
+    listType: element.closest('ul, ol')?.tagName.toLowerCase() || null
   };
 
-  // Store list context ONLY if it's definitely a list item and has a parent list
-  if (elementContext.isList && element.parentNode) {
-      const parentList = element.closest('ul, ol'); // Ensure we get the list element itself
-      if (parentList) { // Check if parentList was found
-          elementContext.listContext = {
-              parentList: parentList.tagName.toLowerCase(),
-              listStyle: window.getComputedStyle(element).listStyleType,
-              isOrdered: parentList.tagName === 'OL',
-              // IMPORTANT: Calculate index relative to the PARENT LIST children
-              itemIndex: Array.from(parentList.children).indexOf(element), 
-              listStart: parentList.getAttribute('start') || null,
-              listReversed: parentList.hasAttribute('reversed') || false
-          };
-      } else {
-          console.warn("getRangeInfo: LI element found, but could not find parent UL/OL.", element);
-      }
-  }
-
-  const messageContent = container.textContent;
-  const messageFingerprint = hashString(messageContent);
-  
-  // Return the range info, including the potentially refined element context
   return {
     text: range.toString(), // Text content of the specific range (intersection)
-    containerFingerprint: messageFingerprint,
     startOffset: range.startOffset, // Relative to startContainer of the passed range
     endOffset: range.endOffset,     // Relative to endContainer of the passed range
-    // Store the start/end containers themselves for more robust restoration?
-    // startContainerPath: getNodePath(range.startContainer), // Example for future enhancement
-    // endContainerPath: getNodePath(range.endContainer),     // Example for future enhancement
-    elementContext: elementContext 
+    elementContext: elementContext
   };
 }
 
@@ -1617,17 +2293,6 @@ function getElementOccurrenceIndex(element) {
     .filter(el => el.textContent.trim() === text);
   const idx = all.indexOf(element);
   return idx >= 0 ? idx : 0;
-}
-
-// Simple hash function for creating message fingerprints
-function hashString(str) {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32bit integer
-  }
-  return hash.toString();
 }
 
 // Handle heading element highlighting
@@ -1647,12 +2312,10 @@ function highlightText(range, clipId, isCodeBlock, isSecondary) {
 // Apply highlights for all saved clips
 function applyHighlights(retryCount = 0, maxRetries = 5) {
   if (isApplyingHighlights) {
-    console.log('Already applying highlights, skipping...');
     return;
   }
   
   isApplyingHighlights = true;
-  console.log('Applying highlights for conversation:', currentConversationId);
   
   clearAllHighlights();
   
@@ -1752,11 +2415,9 @@ function applyHighlights(retryCount = 0, maxRetries = 5) {
     }
   });
   
-  console.log(`Successfully highlighted ${highlightedCount} out of ${clips.length} clips`);
   
   // If no clips were highlighted but we have clips and haven't exceeded retries, try again
   if (highlightedCount === 0 && clips.length > 0 && retryCount < maxRetries) {
-    console.log(`No clips were highlighted, retrying in ${1000 * (retryCount + 1)}ms (attempt ${retryCount + 1}/${maxRetries})`);
     setTimeout(() => {
       applyHighlights(retryCount + 1, maxRetries);
     }, 1000 * (retryCount + 1));
@@ -1774,43 +2435,6 @@ function clearAllHighlights() {
     parent.removeChild(span);
   });
   clearCommentHighlights();
-}
-
-// Highlight text in a container using text node offsets
-function highlightTextInContainer(container, clip) {
-  try {
-    // Get all text nodes in the container
-    const textNodes = getTextNodes(container);
-    let currentOffset = 0;
-    
-    for (const node of textNodes) {
-      const nodeLength = node.textContent.length;
-      
-      // Check if this node contains our text
-      if (currentOffset + nodeLength >= clip.range.startOffset) {
-        const startInNode = Math.max(0, clip.range.startOffset - currentOffset);
-        const endInNode = Math.min(nodeLength, clip.range.endOffset - currentOffset);
-        
-        if (startInNode < endInNode) {
-          // Create a range for this text
-          const range = document.createRange();
-          range.setStart(node, startInNode);
-          range.setEnd(node, endInNode);
-          
-          // Highlight it
-          highlightText(range, clip.id, clip.isCode, clip.isSecondary);
-          return true;
-        }
-      }
-      
-      currentOffset += nodeLength;
-    }
-    
-    return false;
-  } catch (e) {
-    console.error('Error highlighting in container:', e);
-    return false;
-  }
 }
 
 // Find text in a container and create a range for it
@@ -1897,7 +2521,6 @@ function findTextInContainer(container, searchText) {
       // If we couldn't create a precise range but we know the text is in there,
       // create a range for the first portion of the container as a fallback
       if (textNodes.length > 0) {
-        console.log('Creating fallback range for text that we know exists in container');
         const firstNode = textNodes[0];
         const range = document.createRange();
         range.setStart(firstNode, 0);
@@ -1911,7 +2534,6 @@ function findTextInContainer(container, searchText) {
     if (searchText.length > 20) {
       // Try to find a significant chunk of the search text
       const chunk = searchText.slice(0, Math.min(20, searchText.length / 2));
-      console.log('Trying to find a chunk of the text:', chunk);
       return findTextInContainer(container, chunk);
     }
     
@@ -1940,339 +2562,506 @@ function getTextNodes(element) {
   return textNodes;
 }
 
+// Normalize a URL to origin+pathname so re-renders of the same page still match
+// (drops query/hash, which some AI chat sites vary per-load).
+function conversationKeyForUrl(url) {
+  try {
+    const u = new URL(url);
+    return u.origin + u.pathname;
+  } catch (e) {
+    return url;
+  }
+}
+
+// Identifies "this specific conversation/page" for Clips-tab scoping. On Claude the
+// bucket is already per-conversation; on web-clip sites the bucket is per-hostname
+// (shared across every conversation on that host), so we additionally filter by URL.
+function getConversationKey() {
+  if (isClaudeSite()) {
+    return currentConversationId;
+  }
+  return conversationKeyForUrl(window.location.href);
+}
+
+// Scans every bucket for topicId values actually used by an annotation clip,
+// so the Topics filter dropdown never lists orphaned/unused topics.
+function getUsedTopicIdsAcrossAllBuckets() {
+  const used = new Set();
+  Object.values(allClips).forEach(bucket => {
+    (bucket.clips || []).forEach(clip => {
+      if (clip.isSecondary && clip.topicId) used.add(clip.topicId);
+    });
+  });
+  return used;
+}
+
+// Pools annotation clips sharing a topic id across every bucket (every conversation,
+// every site) so the Topics tab can show a true cross-surface view.
+function getTopicClipsAcrossAllBuckets(topicId) {
+  const pooled = [];
+  Object.entries(allClips).forEach(([bucketId, bucket]) => {
+    (bucket.clips || []).forEach(clip => {
+      if (clip.isSecondary && clip.topicId === topicId) {
+        pooled.push({ clip, bucketId, bucketTitle: bucket.title || bucketId });
+      }
+    });
+  });
+  return pooled;
+}
+
+function buildEmptyState(container, title, desc) {
+  const wrap = document.createElement('div');
+  applyStyles(wrap, {
+    flexGrow: '1',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '10px',
+    textAlign: 'center',
+    padding: '24px'
+  });
+  const emptyImg = document.createElement('img');
+  emptyImg.src = chrome.runtime.getURL('images/cairn-stack.png');
+  emptyImg.alt = '';
+  applyStyles(emptyImg, { width: '44px', height: '44px', objectFit: 'contain', mixBlendMode: 'multiply' });
+  wrap.appendChild(emptyImg);
+
+  const titleEl = document.createElement('div');
+  titleEl.textContent = title;
+  applyStyles(titleEl, { fontSize: '15px', fontWeight: '600' });
+
+  const descEl = document.createElement('div');
+  descEl.textContent = desc;
+  applyStyles(descEl, { fontSize: '13px', color: panel.colors.subtext, maxWidth: '220px', lineHeight: '1.45', textWrap: 'pretty' });
+
+  wrap.appendChild(titleEl);
+  wrap.appendChild(descEl);
+  container.appendChild(wrap);
+}
+
+// Builds a single clip card matching the panel design. `sourceLabel` (Claude/ChatGPT/…)
+// only appears in cross-bucket Topics views; `foreignUrl` marks a read-only card whose
+// click opens the saved source URL instead of scrolling to the highlight in this page.
+const AI_CHAT_SOURCE_LABELS = new Set(['Claude', 'ChatGPT', 'Gemini', 'Grok', 'Kimi']);
+
+function createClipCard(clip, opts = {}) {
+  const { sourceLabel, onClick, onDelete, foreignUrl } = opts;
+  const resolvedSourceLabel = sourceLabel || getBucketSourceLabel(currentConversationId);
+  const linkText = AI_CHAT_SOURCE_LABELS.has(resolvedSourceLabel)
+    ? `Open in ${resolvedSourceLabel}`
+    : 'View page';
+
+  const card = document.createElement('article');
+  card.className = 'cairn-card';
+  applyStyles(card, {
+    background: panel.colors.card,
+    border: `1px solid ${panel.colors.border}`,
+    borderRadius: '12px',
+    padding: '12px 10px 12px 14px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+    cursor: 'pointer',
+    boxSizing: 'border-box'
+  });
+  card.addEventListener('click', (e) => {
+    if (e.target.closest('button') || e.target.closest('a')) return;
+    if (foreignUrl) {
+      window.open(foreignUrl, '_blank');
+    } else if (onClick) {
+      onClick();
+    }
+  });
+
+  const row = document.createElement('div');
+  applyStyles(row, { display: 'flex', alignItems: 'center', gap: '7px' });
+
+  if (sourceLabel) {
+    const dot = document.createElement('span');
+    applyStyles(dot, {
+      width: '7px', height: '7px', borderRadius: '50%',
+      background: panel.sourceColors[sourceLabel] || panel.colors.muted, flexShrink: '0'
+    });
+    const srcText = document.createElement('span');
+    srcText.textContent = sourceLabel;
+    applyStyles(srcText, { fontSize: '12px', fontWeight: '600', color: panel.colors.subtext2 });
+    row.appendChild(dot);
+    row.appendChild(srcText);
+  }
+
+  const timeEl = document.createElement('span');
+  timeEl.textContent = formatRelativeClipTime(clip.timestamp);
+  applyStyles(timeEl, { fontSize: '12px', color: panel.colors.subtext });
+  row.appendChild(timeEl);
+
+  const spacer = document.createElement('div');
+  applyStyles(spacer, { flexGrow: '1' });
+  row.appendChild(spacer);
+
+  const copiedLabel = document.createElement('span');
+  copiedLabel.textContent = 'Copied';
+  applyStyles(copiedLabel, {
+    fontSize: '12px', fontWeight: '500', color: panel.colors.accent, padding: '0 6px', display: 'none'
+  });
+  row.appendChild(copiedLabel);
+
+  const copyBtn = document.createElement('button');
+  copyBtn.className = 'cairn-ib';
+  copyBtn.setAttribute('aria-label', 'Copy clip');
+  applyStyles(copyBtn, panelIconButtonStyle('30px'));
+  copyBtn.appendChild(CairnIcons.createIcon('copy', 15, panel.colors.subtext2));
+  copyBtn.addEventListener('click', () => {
+    navigator.clipboard.writeText(clip.text).catch(() => {});
+    copiedLabel.style.display = 'inline';
+    clearTimeout(copyBtn._copyTimeout);
+    copyBtn._copyTimeout = setTimeout(() => { copiedLabel.style.display = 'none'; }, 1400);
+  });
+  row.appendChild(copyBtn);
+
+  if (onDelete) {
+    const deleteButton = document.createElement('button');
+    deleteButton.className = 'cairn-ib';
+    deleteButton.setAttribute('aria-label', 'Remove clip');
+    applyStyles(deleteButton, panelIconButtonStyle('30px'));
+    deleteButton.appendChild(CairnIcons.createIcon('x', 15, panel.colors.subtext2));
+    deleteButton.addEventListener('click', onDelete);
+    row.appendChild(deleteButton);
+  }
+
+  card.appendChild(row);
+
+  const textEl = document.createElement('div');
+  textEl.className = 'cairn-richtext';
+  textEl.innerHTML = clipToRichHtml(clip);
+  applyStyles(textEl, clip.isCode ? {
+    margin: '0',
+    fontFamily: '"Fira Code", "Menlo", "Monaco", "Courier New", monospace',
+    fontSize: '12.5px',
+    lineHeight: '1.4',
+    color: '#d4d4d4',
+    background: '#1e1e1e',
+    borderRadius: '8px',
+    padding: '10px',
+    whiteSpace: 'pre',
+    overflowX: 'auto',
+    overflowY: 'auto',
+    maxHeight: '150px'
+  } : {
+    margin: '0',
+    paddingRight: '6px',
+    fontFamily: panel.font.serif,
+    fontSize: '16px',
+    lineHeight: '1.5',
+    color: panel.colors.text
+  });
+  card.appendChild(textEl);
+
+  const footerRow = document.createElement('div');
+  applyStyles(footerRow, { display: 'flex', alignItems: 'center', gap: '8px', paddingRight: '4px' });
+
+  if (clip.topicId) {
+    const topic = topicsCache.find(t => t.id === clip.topicId);
+    if (topic) {
+      const pill = document.createElement('span');
+      pill.textContent = topic.name;
+      applyStyles(pill, {
+        fontSize: '11.5px', fontWeight: '500', color: panel.colors.subtext2,
+        background: panel.colors.topicPillBg, borderRadius: '6px', padding: '3px 8px'
+      });
+      footerRow.appendChild(pill);
+    }
+  }
+
+  const footerSpacer = document.createElement('div');
+  applyStyles(footerSpacer, { flexGrow: '1' });
+  footerRow.appendChild(footerSpacer);
+
+  const link = document.createElement('a');
+  link.className = 'cairn-lnk';
+  link.href = clip.url;
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+  applyStyles(link, {
+    fontSize: '12.5px', fontWeight: '500', color: panel.colors.accent,
+    display: 'flex', alignItems: 'center', gap: '4px'
+  });
+  link.innerHTML = `${linkText}<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"></path></svg>`;
+  footerRow.appendChild(link);
+
+  card.appendChild(footerRow);
+
+  return card;
+}
+
+function createCommentCard(item) {
+  const card = document.createElement('article');
+  card.className = 'cairn-card';
+  applyStyles(card, {
+    background: panel.colors.card,
+    border: `1px solid ${panel.colors.border}`,
+    borderRadius: '12px',
+    padding: '14px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+    cursor: 'pointer',
+    boxSizing: 'border-box'
+  });
+  card.addEventListener('click', (e) => {
+    if (e.target.closest('button')) return;
+    if (item.artifactName) {
+      openArtifactAndScrollToComment(item);
+    } else {
+      scrollToComment(item.id);
+    }
+  });
+
+  const row = document.createElement('div');
+  applyStyles(row, { display: 'flex', alignItems: 'center', gap: '7px' });
+
+  const timeEl = document.createElement('span');
+  timeEl.textContent = formatRelativeClipTime(item.timestamp);
+  applyStyles(timeEl, { fontSize: '12px', color: panel.colors.subtext });
+  row.appendChild(timeEl);
+
+  const spacer = document.createElement('div');
+  applyStyles(spacer, { flexGrow: '1' });
+  row.appendChild(spacer);
+
+  const copiedLabel = document.createElement('span');
+  copiedLabel.textContent = 'Copied';
+  applyStyles(copiedLabel, {
+    fontSize: '12px', fontWeight: '500', color: panel.colors.accent, padding: '0 6px', display: 'none'
+  });
+  row.appendChild(copiedLabel);
+
+  const copyBtn = document.createElement('button');
+  copyBtn.className = 'cairn-ib';
+  copyBtn.setAttribute('aria-label', 'Copy comment');
+  applyStyles(copyBtn, panelIconButtonStyle('30px'));
+  copyBtn.appendChild(CairnIcons.createIcon('copy', 14, panel.colors.subtext2));
+  copyBtn.addEventListener('click', () => {
+    const text = `> "${item.selectedText}"\n\nComment: ${item.comment}`;
+    navigator.clipboard.writeText(text).catch(() => {});
+    copiedLabel.style.display = 'inline';
+    clearTimeout(copyBtn._copyTimeout);
+    copyBtn._copyTimeout = setTimeout(() => { copiedLabel.style.display = 'none'; }, 1400);
+  });
+  row.appendChild(copyBtn);
+
+  const deleteButton = document.createElement('button');
+  deleteButton.className = 'cairn-ib';
+  deleteButton.setAttribute('aria-label', 'Remove comment');
+  applyStyles(deleteButton, panelIconButtonStyle('30px'));
+  deleteButton.appendChild(CairnIcons.createIcon('x', 14, panel.colors.subtext2));
+  deleteButton.addEventListener('click', () => deleteComment(item.id));
+  row.appendChild(deleteButton);
+
+  card.appendChild(row);
+
+  if (item.artifactName) {
+    const artifactPill = document.createElement('div');
+    artifactPill.textContent = `📄 ${item.artifactName}`;
+    applyStyles(artifactPill, {
+      fontSize: '11px', color: panel.colors.subtext, opacity: '0.8',
+      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+    });
+    card.appendChild(artifactPill);
+  }
+
+  const quote = document.createElement('p');
+  quote.textContent = item.selectedText;
+  applyStyles(quote, {
+    margin: '0', fontFamily: panel.font.serif, fontStyle: 'italic',
+    fontSize: '14.5px', lineHeight: '1.45', color: panel.colors.subtext, wordBreak: 'break-word'
+  });
+  card.appendChild(quote);
+
+  const replyBox = document.createElement('div');
+  applyStyles(replyBox, {
+    display: 'flex', gap: '10px', alignItems: 'flex-start',
+    background: panel.colors.replyBg, borderRadius: '9px', padding: '10px 12px'
+  });
+  replyBox.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="${panel.colors.subtext}" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;margin-top:2px"><path d="M5 5h14v10H10l-4 4v-4H5z"></path></svg>`;
+  const replyText = document.createElement('div');
+  replyText.textContent = item.comment;
+  applyStyles(replyText, { fontSize: '13.5px', lineHeight: '1.45', color: panel.colors.text, wordBreak: 'break-word' });
+  replyBox.appendChild(replyText);
+  card.appendChild(replyBox);
+
+  return card;
+}
+
+// Renders a pooled cross-bucket Topics-tab view. Cards from the current bucket keep
+// the normal scroll-to/delete behavior; cards from other conversations/sites are
+// read-only and open their saved source URL instead.
+function renderTopicClips(modalContent, pooled) {
+  if (pooled.length === 0) {
+    buildEmptyState(modalContent, 'No clips here yet', 'Nothing has been added to this topic.');
+    return;
+  }
+
+  const sorted = [...pooled].reverse();
+  sorted.forEach(({ clip, bucketId }) => {
+    const isCurrentBucket = bucketId === currentConversationId;
+    modalContent.appendChild(createClipCard(clip, {
+      sourceLabel: getBucketSourceLabel(bucketId),
+      onClick: isCurrentBucket ? () => scrollToClip(clip.id) : null,
+      onDelete: isCurrentBucket ? () => deleteClip(clip.id) : null,
+      foreignUrl: isCurrentBucket ? null : clip.url
+    }));
+  });
+}
+
+function renderClipsList(container, list, emptyTitle, emptyDesc) {
+  if (list.length === 0) {
+    buildEmptyState(container, emptyTitle, emptyDesc);
+    return;
+  }
+  const sorted = [...list].reverse();
+  sorted.forEach(clip => container.appendChild(createClipCard(clip, {
+    onClick: () => scrollToClip(clip.id),
+    onDelete: () => deleteClip(clip.id)
+  })));
+}
+
+function renderChipsRow(container, availableTopics) {
+  if (availableTopics.length === 0) return;
+
+  const row = document.createElement('div');
+  applyStyles(row, { display: 'flex', flexWrap: 'wrap', gap: '6px', paddingBottom: '4px' });
+
+  const makeChip = (label, value) => {
+    const active = (currentAnnotationFilter || '') === value;
+    const chip = document.createElement('button');
+    chip.className = 'cairn-chip';
+    chip.textContent = label;
+    applyStyles(chip, {
+      height: '30px', padding: '0 12px', borderRadius: '15px',
+      font: `500 12.5px ${panel.font.sans}`, cursor: 'pointer', boxSizing: 'border-box',
+      background: active ? panel.colors.accent : panel.colors.card,
+      color: active ? '#FFFFFF' : panel.colors.subtext2,
+      border: `1px solid ${active ? panel.colors.accent : panel.colors.borderStrong}`
+    });
+    chip.addEventListener('click', () => {
+      currentAnnotationFilter = value || null;
+      updateModalContent();
+    });
+    return chip;
+  };
+
+  availableTopics.forEach(topic => row.appendChild(makeChip(topic.name, topic.id)));
+  container.appendChild(row);
+}
+
+function renderCommentsTab(container) {
+  const toggleRow = document.createElement('div');
+  applyStyles(toggleRow, { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2px 2px 8px' });
+
+  const toggleLabel = document.createElement('span');
+  toggleLabel.textContent = 'Send to input on save';
+  applyStyles(toggleLabel, { fontSize: '12px', color: panel.colors.subtext });
+
+  const track = document.createElement('div');
+  applyStyles(track, {
+    width: '34px', height: '18px', borderRadius: '9px',
+    background: sendCommentToInput ? panel.colors.accent : panel.colors.borderStrong,
+    position: 'relative', cursor: 'pointer', transition: 'background-color 0.2s', flexShrink: '0'
+  });
+  const thumb = document.createElement('div');
+  applyStyles(thumb, {
+    width: '14px', height: '14px', borderRadius: '50%', background: '#fff',
+    position: 'absolute', top: '2px', left: sendCommentToInput ? '18px' : '2px',
+    transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+  });
+  track.appendChild(thumb);
+  track.addEventListener('click', () => {
+    sendCommentToInput = !sendCommentToInput;
+    localStorage.setItem('cairn-send-on-comment', sendCommentToInput ? 'true' : 'false');
+    updateModalContent();
+  });
+
+  toggleRow.appendChild(toggleLabel);
+  toggleRow.appendChild(track);
+  container.appendChild(toggleRow);
+
+  if (comments.length === 0) {
+    buildEmptyState(
+      container,
+      currentConversationId === 'default' ? 'No conversation open' : 'No comments yet',
+      currentConversationId === 'default'
+        ? 'Use Open notebook below to browse saved conversations.'
+        : 'Select text and click Comment to add one.'
+    );
+    return;
+  }
+
+  [...comments].reverse().forEach(item => container.appendChild(createCommentCard(item)));
+}
+
 // Update the content of the modal with clips from current conversation
 function updateModalContent() {
   const modalContent = document.getElementById('cairn-content');
-  const filterContainer = document.getElementById('cairn-filter-container');
-  const labelSelect = document.getElementById('cairn-label-filter-select');
-  const clearFilterButton = document.getElementById('cairn-clear-filter-button');
-  
+  if (!modalContent) return;
   modalContent.innerHTML = ''; // Clear previous content
+
+  // Clips tab on web-clip sites is scoped to the current conversation/page, since the
+  // bucket itself is shared per-hostname across every conversation on that site.
+  const conversationKey = getConversationKey();
+  const scopedClips = isWebClipMode()
+    ? clips.filter(clip => conversationKeyForUrl(clip.url) === conversationKey)
+    : clips;
+  const clipsTabClips = scopedClips.filter(clip => !clip.isSecondary);
+  const annotationClips = scopedClips.filter(clip => clip.isSecondary);
+
+  // Topics are cross-bucket by design, so the chip list shows every topic in use
+  // anywhere (not just the current conversation/site).
+  const usedTopicIds = getUsedTopicIdsAcrossAllBuckets();
+  const availableTopics = topicsCache
+    .filter(topic => usedTopicIds.has(topic.id))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  if (currentAnnotationFilter && !availableTopics.some(topic => topic.id === currentAnnotationFilter)) {
+    currentAnnotationFilter = null;
+  }
+
+  renderTabsRow({ clips: clipsTabClips.length, topics: availableTopics.length, comments: comments.length });
 
   // --- Comments tab — completely separate from clips/annotations ---
   if (activeTab === 'comments') {
-    if (filterContainer) filterContainer.style.display = 'none';
-
-    // Toggle: send comment to input on save
-    const toggleRow = document.createElement('div');
-    applyStyles(toggleRow, {
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      padding: `${styles.spacing.xs} 0`,
-      marginBottom: styles.spacing.sm,
-      borderBottom: `1px solid ${styles.colors.border}`
-    });
-
-    const toggleLabel = document.createElement('span');
-    toggleLabel.textContent = 'Send to input on save';
-    applyStyles(toggleLabel, { fontSize: '0.8rem', color: styles.colors.text.normal });
-
-    const track = document.createElement('div');
-    applyStyles(track, {
-      width: '34px',
-      height: '18px',
-      borderRadius: '9px',
-      backgroundColor: sendCommentToInput ? styles.colors.primary : '#ccc',
-      position: 'relative',
-      cursor: 'pointer',
-      transition: 'background-color 0.2s',
-      flexShrink: '0'
-    });
-    const thumb = document.createElement('div');
-    applyStyles(thumb, {
-      width: '14px',
-      height: '14px',
-      borderRadius: '50%',
-      backgroundColor: '#fff',
-      position: 'absolute',
-      top: '2px',
-      left: sendCommentToInput ? '18px' : '2px',
-      transition: 'left 0.2s',
-      boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
-    });
-    track.appendChild(thumb);
-    track.addEventListener('click', () => {
-      sendCommentToInput = !sendCommentToInput;
-      localStorage.setItem('cairn-send-on-comment', sendCommentToInput ? 'true' : 'false');
-      updateModalContent();
-    });
-
-    toggleRow.appendChild(toggleLabel);
-    toggleRow.appendChild(track);
-    modalContent.appendChild(toggleRow);
-
-    if (comments.length === 0) {
-      const emptyMessage = document.createElement('p');
-      emptyMessage.textContent = 'No comments yet. Select text and click "Comment" to add one.';
-      applyStyles(emptyMessage, { color: styles.colors.text.normal });
-      modalContent.appendChild(emptyMessage);
-      return;
-    }
-
-    [...comments].reverse().forEach(item => {
-      const card = document.createElement('div');
-      card.className = 'cairn-clip';
-      applyStyles(card, createStyleObject(baseStyles.clip, { cursor: 'pointer', paddingBottom: '28px' }));
-      card.addEventListener('click', (e) => {
-        if (e.target.closest('button')) return;
-        if (item.artifactName) {
-          openArtifactAndScrollToComment(item);
-        } else {
-          scrollToComment(item.id);
-        }
-      });
-
-      // Selected text — left-border highlight style
-      const quote = document.createElement('div');
-      quote.textContent = item.selectedText;
-      applyStyles(quote, {
-        padding: `${styles.spacing.xs} ${styles.spacing.sm} ${styles.spacing.xs} 10px`,
-        borderLeft: `3px solid ${styles.colors.primary}`,
-        backgroundColor: 'rgba(201, 100, 66, 0.04)',
-        borderRadius: '0 2px 2px 0',
-        fontSize: '0.8rem',
-        lineHeight: '1.4',
-        color: styles.colors.text.dark,
-        wordBreak: 'break-word',
-        marginBottom: styles.spacing.xs
-      });
-
-      // Comment text
-      const commentText = document.createElement('div');
-      commentText.textContent = item.comment;
-      applyStyles(commentText, {
-        fontSize: '0.875rem',
-        lineHeight: '1.5',
-        color: styles.colors.text.dark,
-        wordBreak: 'break-word'
-      });
-
-      const deleteButton = document.createElement('button');
-      applyStyles(deleteButton, createStyleObject(baseStyles.deleteButton, {
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
-      }));
-      deleteButton.appendChild(CairnIcons.createIcon('x', 16, styles.colors.text.normal));
-      deleteButton.addEventListener('click', () => deleteComment(item.id));
-
-      const copyButton = document.createElement('button');
-      applyStyles(copyButton, {
-        position: 'absolute',
-        bottom: styles.spacing.sm,
-        right: styles.spacing.sm,
-        background: 'none',
-        border: 'none',
-        color: styles.colors.text.normal,
-        cursor: 'pointer',
-        padding: '2px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        lineHeight: '0'
-      });
-      copyButton.title = 'Copy comment';
-      copyButton.appendChild(CairnIcons.createIcon('copy', 14, styles.colors.text.normal));
-      copyButton.addEventListener('click', () => {
-        const text = `> "${item.selectedText}"\n\nComment: ${item.comment}`;
-        navigator.clipboard.writeText(text).catch(() => {});
-        copyButton.innerHTML = '';
-        copyButton.appendChild(CairnIcons.createIcon('check', 14, '#22c55e'));
-        setTimeout(() => {
-          copyButton.innerHTML = '';
-          copyButton.appendChild(CairnIcons.createIcon('copy', 14, styles.colors.text.normal));
-        }, 1500);
-      });
-
-      card.appendChild(quote);
-      if (item.artifactName) {
-        const artifactPill = document.createElement('div');
-        artifactPill.textContent = `📄 ${item.artifactName}`;
-        applyStyles(artifactPill, {
-          fontSize: '0.7rem',
-          color: styles.colors.text.normal,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          marginBottom: styles.spacing.xs,
-          opacity: '0.75'
-        });
-        card.appendChild(artifactPill);
-      }
-      card.appendChild(commentText);
-      card.appendChild(deleteButton);
-      card.appendChild(copyButton);
-      modalContent.appendChild(card);
-    });
+    renderCommentsTab(modalContent);
     return;
   }
-  // --- End comments tab ---
 
-  // --- Debugging Start ---
-  console.log(`--- updateModalContent ---`);
-  console.log(`Active Tab: ${activeTab}`);
-  console.log(`Total clips in memory: ${clips.length}`);
-  console.log(`Annotations in memory: ${clips.filter(c => c.isSecondary).length}`);
-  // --- Debugging End ---
+  const isDefaultConversation = currentConversationId === 'default';
+  const openNotebookHint = 'Use Open notebook below to browse saved conversations.';
 
-  // Handle filter UI visibility and population
-  if (activeTab === 'annotations' && labelSelect && filterContainer) {
-    filterContainer.style.display = 'flex'; // Show filter UI
+  if (activeTab === 'annotations') {
+    renderChipsRow(modalContent, availableTopics);
 
-    // Get unique labels from *all* annotations
-    const uniqueLabels = [...new Set(
-        clips
-            .filter(clip => clip.isSecondary && clip.label)
-            .map(clip => clip.label)
-    )].sort();
-
-    // Populate select dropdown
-    // Store current value to reset it later if possible
-    const currentSelectedValue = labelSelect.value;
-    labelSelect.innerHTML = ''; // Clear previous options
-    
-    const defaultOption = document.createElement('option');
-    defaultOption.value = "";
-    defaultOption.textContent = "-- Filter by label --";
-    labelSelect.appendChild(defaultOption);
-
-    uniqueLabels.forEach(label => {
-        const option = document.createElement('option');
-        option.value = label;
-        option.textContent = label;
-        labelSelect.appendChild(option);
-    });
-
-    // Set current filter selection and button state
-    // Try to restore previous selection if it still exists, otherwise use global filter state
-    if (uniqueLabels.includes(currentSelectedValue)) {
-        labelSelect.value = currentSelectedValue;
-        currentAnnotationFilter = currentSelectedValue; // Ensure filter state matches dropdown
+    // Topics tab with an active filter: pool matching clips across every bucket/site,
+    // so annotations sharing a topic are visible regardless of where they were made.
+    if (currentAnnotationFilter) {
+      renderTopicClips(modalContent, getTopicClipsAcrossAllBuckets(currentAnnotationFilter));
     } else {
-        labelSelect.value = currentAnnotationFilter || ""; 
+      renderClipsList(
+        modalContent,
+        annotationClips,
+        isDefaultConversation ? 'No conversation open' : 'No topics yet',
+        isDefaultConversation ? openNotebookHint : 'Select text and click Add to Topic to save one.'
+      );
     }
-    clearFilterButton.disabled = !currentAnnotationFilter;
-
-  } else if (filterContainer) {
-    filterContainer.style.display = 'none'; // Hide filter UI for 'Clips' tab
-  }
-  
-  // Check for overall clips emptiness first
-  if (clips.length === 0) {
-    const emptyMessage = document.createElement('p');
-    emptyMessage.textContent = activeTab === 'clips' 
-      ? 'No clips saved in this conversation yet. Select text and click "Clip" to save.'
-      : 'No annotations saved in this conversation yet. Select text and click "Annotate" to save.';
-    applyStyles(emptyMessage, {
-      color: styles.colors.text.normal
-    });
-    modalContent.appendChild(emptyMessage);
     return;
   }
-  
-  // Filter clips based on active tab FIRST
-  let filteredClips = clips.filter(clip => 
-    activeTab === 'clips' ? !clip.isSecondary : clip.isSecondary
+
+  // Clips tab
+  renderClipsList(
+    modalContent,
+    clipsTabClips,
+    isDefaultConversation ? 'No conversation open' : 'No clips yet',
+    isDefaultConversation ? openNotebookHint : 'Select text and click Clip to save it here.'
   );
-  
-  // --- Debugging Start ---
-  console.log(`Clips after tab filter (${activeTab}): ${filteredClips.length}`);
-  console.log(`Current label filter: ${currentAnnotationFilter}`);
-  // --- Debugging End ---
-
-  // NEW: Apply label filter if on Annotations tab and filter is active
-  if (activeTab === 'annotations' && currentAnnotationFilter) {
-      filteredClips = filteredClips.filter(clip => clip.label === currentAnnotationFilter);
-      // --- Debugging Start ---
-      console.log(`Clips after label filter (${currentAnnotationFilter}): ${filteredClips.length}`);
-      // --- Debugging End ---
-  }
-  
-  // Check for emptiness AFTER filtering
-  if (filteredClips.length === 0) {
-     const emptyMessage = document.createElement('p');
-     emptyMessage.textContent = activeTab === 'clips' 
-       ? 'No clips saved yet.' // Should not happen if clips.length > 0, but good fallback
-       : currentAnnotationFilter 
-         ? `No annotations found with label: "${currentAnnotationFilter}"`
-         : 'No annotations saved yet.'; // Adjusted message
-     applyStyles(emptyMessage, { color: styles.colors.text.normal });
-     modalContent.appendChild(emptyMessage);
-    return;
-  }
-  
-  // Sort clips in descending order (newest first)
-  const sortedClips = [...filteredClips].reverse();
-  
-  // --- Debugging Start ---
-  console.log('Clips to render:', sortedClips.map(c => ({ id: c.id, text: c.text.substring(0, 15), isSecondary: c.isSecondary, label: c.label })));
-  // --- Debugging End ---
-  
-  // Render the filtered clips (existing loop logic)
-  sortedClips.forEach(clip => {
-      const clipElement = document.createElement('div');
-      clipElement.className = 'cairn-clip';
-      applyStyles(clipElement, createStyleObject(baseStyles.clip, {
-        cursor: 'pointer'  // Add pointer cursor to indicate clickability
-      }));
-      
-      // Add click handler to the clip element
-      clipElement.addEventListener('click', (e) => {
-        // Don't trigger if clicking the delete button
-        if (e.target.closest('button')) return;
-        scrollToClip(clip.id);
-      });
-  
-      const clipNumber = document.createElement('div');
-      clipNumber.textContent = clip.id + 1;
-      applyStyles(clipNumber, createStyleObject(baseStyles.clipNumber, {
-        color: clip.isSecondary ? styles.colors.text.normal : styles.colors.primary
-      }));
-      
-      const clipContent = document.createElement('div');
-      applyStyles(clipContent, baseStyles.clipContent);
-      
-      const clipText = document.createElement('div');
-      clipText.className = 'cairn-richtext';
-      clipText.innerHTML = clipToRichHtml(clip);
-      applyStyles(clipText, createStyleObject(
-        baseStyles.clipText,
-        clip.isSecondary ? baseStyles.clipTextSecondary : {}
-      ));
-
-      clipContent.appendChild(clipText); // Add the main text first
-  
-      // Display label if it exists (existing logic)
-      if (clip.label) {
-          const clipLabel = document.createElement('div');
-          // Remove the "Label: " prefix
-          clipLabel.textContent = clip.label; 
-          applyStyles(clipLabel, {
-              fontSize: '0.75rem', // Smaller font size
-              color: styles.colors.text.normal,
-              marginTop: styles.spacing.xs,
-              fontStyle: 'italic'
-          });
-          clipContent.appendChild(clipLabel); // Append label below text
-      }
-  
-      const deleteButton = document.createElement('button');
-      applyStyles(deleteButton, createStyleObject(baseStyles.deleteButton, {
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
-      }));
-      deleteButton.appendChild(CairnIcons.createIcon('x', 16, styles.colors.text.normal));
-      deleteButton.addEventListener('click', () => {
-        deleteClip(clip.id);
-      });
-      
-      clipElement.appendChild(clipNumber);
-      clipElement.appendChild(clipContent);
-      clipElement.appendChild(deleteButton);
-      modalContent.appendChild(clipElement);
-  });
 }
 
 // Clear all clips from current conversation
@@ -2303,9 +3092,7 @@ function clearAllClips() {
     }
 
     // 4. Save updated storage
-    chrome.storage.local.set({ 'cairnNotesV2': allClips }, () => {
-        console.log('Cairn:All clips cleared from conversation', currentConversationId);
-    });
+    chrome.storage.local.set({ 'cairnNotesV2': allClips });
 
     // 5. Update the modal UI
     updateModalContent();
@@ -2314,7 +3101,16 @@ function clearAllClips() {
 
 // Load clips from storage
 function loadClips() {
-  chrome.storage.local.get(['claudeNotes', 'claudeNotesV2', 'cairnNotesV2'], (result) => {
+  migrateLabelsToTopics(() => {
+    getTopics().then((topics) => {
+      topicsCache = topics;
+      loadClipsAfterMigration();
+    });
+  });
+}
+
+function loadClipsAfterMigration() {
+  chrome.storage.local.get(['claudeNotesV2', 'cairnNotesV2'], (result) => {
     const v2data = result.cairnNotesV2 || result.claudeNotesV2;
     if (v2data) {
       allClips = v2data;
@@ -2334,9 +3130,7 @@ function loadClips() {
       
       // Save updates if any titles were corrected
       if (needsUpdate) {
-        chrome.storage.local.set({ 'cairnNotesV2': allClips }, () => {
-          console.log('Updated conversation titles');
-        });
+        chrome.storage.local.set({ 'cairnNotesV2': allClips });
       }
       
       // If we have clips for the current conversation, use them
@@ -2353,14 +3147,11 @@ function loadClips() {
           allClips[currentConversationId].lastUpdated = new Date().toISOString();
           
           // Save the updated title
-          chrome.storage.local.set({ 'cairnNotesV2': allClips }, () => {
-            console.log('Updated conversation title');
-          });
+          chrome.storage.local.set({ 'cairnNotesV2': allClips });
         }
 
-        // Show modal if we have clips and are in a conversation
-        if (clips.length > 0 && currentConversationId !== 'default') {
-          console.log('Found existing clips, showing modal...');
+        // Show modal if we have clips and are in a conversation (Claude only)
+        if (!isWebClipMode() && clips.length > 0 && currentConversationId !== 'default') {
           if (!noteModal) {
             createModal();
           }
@@ -2381,33 +3172,6 @@ function loadClips() {
           comments: []
         };
       }
-    } else if (result.claudeNotes) {
-      // Old format, migrate to new format
-      console.log('Migrating old notes format to new format');
-      allClips = {};
-      
-      // Create a default conversation for old notes
-      allClips['migrated'] = {
-        id: 'migrated',
-        title: 'Migrated Notes',
-        lastUpdated: new Date().toISOString(),
-        clips: result.claudeNotes
-      };
-      
-      // Initialize current conversation
-      clips = [];
-      currentClipId = 0;
-      allClips[currentConversationId] = {
-        id: currentConversationId,
-        title: conversationTitle,
-        lastUpdated: new Date().toISOString(),
-        clips: []
-      };
-      
-      // Save the migrated structure
-      chrome.storage.local.set({ 'cairnNotesV2': allClips }, () => {
-        console.log('Migration complete');
-      });
     } else {
       // No existing data
       clips = [];
@@ -2424,76 +3188,78 @@ function loadClips() {
       };
     }
     
-    // Update modal content
-    updateModalContent();
-    
-    // Apply highlights once Claude's DOM is ready
-    if (clips.length > 0 || comments.length > 0) {
-      console.log('Waiting for Claude content before applying highlights...');
-      waitForClaudeContent();
+    // Claude waits for its own DOM before showing the modal; other sites can show
+    // immediately since there's no client-rendered chat history to wait for.
+    if (!isWebClipMode()) {
+      updateModalContent();
+      if (clips.length > 0 || comments.length > 0) {
+        waitForClaudeContent();
+      }
+    } else {
+      if (supportsElementHighlights() && clips.length > 0) {
+        applyHighlights();
+      }
+      if (!noteModal) {
+        createModal();
+      }
+      updateModalContent();
+      if (clips.length > 0) {
+        noteModal.style.display = 'flex';
+        applyModalPosition();
+      }
     }
   });
 }
 
 // Listen for messages from background or popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('Content script received message:', message);
-  
+
   if (message.action === 'toggleModal') {
-    // Get current conversation ID
-    const currentConvId = extractConversationId();
-    
-    // Check if we're on a page with a valid conversation ID
-    if (currentConvId === 'default') {
-      console.log('No valid conversation ID found, cannot show modal');
-      sendResponse({ success: false, error: 'No conversation found on this page' });
+    // Non-Claude sites: toolbar toggles the same Notes modal as Claude (no per-conversation
+    // reload needed here since the storage bucket is shared per-hostname, not per-chat).
+    if (isWebClipMode()) {
+      if (!noteModal) init();
+      if (noteModal) {
+        if (noteModal.style.display === 'none') {
+          noteModal.style.display = 'flex';
+          updateModalContent();
+          applyModalPosition();
+        } else {
+          noteModal.style.display = 'none';
+        }
+        sendResponse({ success: true });
+      } else {
+        sendResponse({ success: false, error: 'Modal not initialized' });
+      }
       return true;
     }
-    
-    // Initialize if needed
+
+    const currentConvId = extractConversationId();
+
+    // Initialize if needed (works for new chats with id === 'default')
     if (!noteModal) {
-      console.log('Modal not initialized yet, creating it now');
       init();
+    } else if (currentConvId !== 'default' && currentConvId !== currentConversationId) {
+      currentConversationId = currentConvId;
+      lastUrl = window.location.href;
+      conversationTitle = document.title.replace(' - Claude', '').trim();
+      clearAllHighlights();
+      loadClips();
+      setTimeout(() => {
+        applyHighlights();
+      }, 100);
     } else {
-      // Check if we need to refresh data due to conversation change
-      if (currentConvId !== currentConversationId) {
-        console.log('Conversation changed since last modal interaction, updating...');
-        // Update conversation info
-        currentConversationId = currentConvId;
-        lastUrl = window.location.href;
-        conversationTitle = document.title.replace(' - Claude', '').trim();
-        
-        // Clear old highlights
-        clearAllHighlights();
-        
-        // Load new clips and update modal
-        loadClips();
-        
-        // This will trigger after loadClips completes
-        setTimeout(() => {
-          // Apply new highlights
-          applyHighlights();
-        }, 100);
-      } else {
-        // Same conversation, but make sure modal content is up to date
-        updateModalContent();
-      }
+      currentConversationId = currentConvId;
+      conversationTitle = getBucketTitle();
+      updateModalContent();
     }
-    
-    // Toggle modal visibility
+
     if (noteModal) {
       if (noteModal.style.display === 'none') {
-        console.log('Showing modal');
-
         noteModal.style.display = 'flex';
-
-        // Force update the content when showing
         updateModalContent();
-
-        // Apply saved position (or default), then bounds-check
         applyModalPosition();
       } else {
-        console.log('Hiding modal');
         noteModal.style.display = 'none';
       }
       sendResponse({ success: true });
@@ -2501,7 +3267,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       console.error('Could not toggle modal, not initialized');
       sendResponse({ success: false, error: 'Modal not initialized' });
     }
-    return true; // Keep the message channel open for async response
+    return true;
   }
 });
 
@@ -2526,8 +3292,6 @@ function applyModalPosition() {
 function ensureModalWithinBounds() {
   if (!noteModal) return;
   
-  console.log('--- ensureModalWithinBounds --- START ---'); // Log start
-  console.log('Initial styles:', { top: noteModal.style.top, left: noteModal.style.left, right: noteModal.style.right }); // Log initial styles
 
   const minDistanceFromEdge = 50;
   const windowWidth = window.innerWidth;
@@ -2540,21 +3304,17 @@ function ensureModalWithinBounds() {
   let currentTop = rect.top;
   let currentLeft = rect.left;
   
-  console.log('Dimensions:', { windowWidth, windowHeight, modalWidth, modalHeight });
-  console.log('Current Rect:', { currentTop, currentLeft });
 
   // Check if modal is too close to any edge
   let needsRepositioning = false;
 
   // Top constraint
   if (currentTop < minDistanceFromEdge) {
-    console.log('Adjusting TOP: Too close to top');
     noteModal.style.top = `${minDistanceFromEdge}px`;
     needsRepositioning = true;
   } 
   // Bottom constraint
   else if (currentTop + modalHeight > windowHeight - minDistanceFromEdge) {
-    console.log('Adjusting TOP: Too close to bottom');
     const newTop = Math.max(minDistanceFromEdge, windowHeight - modalHeight - minDistanceFromEdge); // Ensure it doesn't go above top edge
     noteModal.style.top = `${newTop}px`;
     needsRepositioning = true;
@@ -2563,9 +3323,7 @@ function ensureModalWithinBounds() {
   // --- Check RIGHT edge FIRST if right style is set ---
   if (noteModal.style.right && noteModal.style.right !== 'auto') {
       const currentRight = windowWidth - currentLeft - modalWidth;
-      console.log('Checking RIGHT edge (currentRight value: ', currentRight, ')');
       if (currentRight < minDistanceFromEdge) {
-          console.log('Adjusting RIGHT: Too close to right edge');
           const newRight = minDistanceFromEdge;
           noteModal.style.right = `${newRight}px`;
           noteModal.style.left = ''; // Clear left if setting right
@@ -2573,24 +3331,20 @@ function ensureModalWithinBounds() {
       }
       // If right is okay, we might not need to check left unless it's also out of bounds
       else if (currentLeft < minDistanceFromEdge) {
-          console.log('Adjusting LEFT (even though right was set): Too close to left edge');
           noteModal.style.left = `${minDistanceFromEdge}px`;
           noteModal.style.right = ''; // Clear right if setting left
           needsRepositioning = true;
       }
   } else {
       // --- Original Left/Right check if right style wasn't the priority ---
-      console.log('Checking LEFT/RIGHT edges (right style not set)');
       // Left constraint
       if (currentLeft < minDistanceFromEdge) {
-        console.log('Adjusting LEFT: Too close to left edge');
         noteModal.style.left = `${minDistanceFromEdge}px`;
         noteModal.style.right = ''; // Clear right if setting left
         needsRepositioning = true;
       } 
       // Right constraint (based on left + width)
       else if (currentLeft + modalWidth > windowWidth - minDistanceFromEdge) {
-        console.log('Adjusting LEFT: Too close to right edge');
         const newLeft = Math.max(minDistanceFromEdge, windowWidth - modalWidth - minDistanceFromEdge); // Ensure it doesn't go past left edge
         noteModal.style.left = `${newLeft}px`;
         noteModal.style.right = ''; // Clear right if setting left
@@ -2599,7 +3353,6 @@ function ensureModalWithinBounds() {
   }
 
   if (needsRepositioning) {
-      console.log('Final styles applied:', { top: noteModal.style.top, left: noteModal.style.left, right: noteModal.style.right });
       // Persist corrected position if we're in left-based mode (i.e. user has dragged)
       if (noteModal.style.left) {
         chrome.storage.local.set({
@@ -2610,7 +3363,6 @@ function ensureModalWithinBounds() {
         });
       }
   }
-  console.log('--- ensureModalWithinBounds --- END ---'); // Log end
 }
 
 // Add this new function to handle scrolling to a clip
@@ -2618,7 +3370,6 @@ function scrollToClip(clipId) {
   const highlight = document.querySelector(`.cairn-clip-highlight[data-clip-id="${clipId}"]`);
 
   if (!highlight) {
-    console.log('Could not find highlight for clip:', clipId);
     return;
   }
 
@@ -2629,7 +3380,6 @@ function scrollToClip(clipId) {
 function scrollToComment(commentId) {
   const span = document.querySelector(`.cairn-comment-highlight[data-comment-id="${commentId}"]`);
   if (!span) {
-    console.log('Could not find highlight for comment:', commentId);
     return;
   }
   span.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -2936,239 +3686,228 @@ function openArtifactAndScrollToComment(comment) {
   setTimeout(tick, viewBtn ? 90 : 0);
 }
 
-function restoreHighlight(clip, container) {
-  // Find the matching element based on context
-  let targetElement = null;
-  const elementContext = clip.elementContext;
-  
-  // Handle headings
-  if (elementContext.isHeading) {
-    const headings = container.querySelectorAll(`h${elementContext.headingLevel}`);
-    for (const heading of headings) {
-      if (heading.textContent.includes(clip.text)) {
-        targetElement = heading;
-        break;
-      }
-    }
-  }
-  // Handle list items
-  else if (elementContext.isList) {
-    const listContext = elementContext.listContext;
-    const listSelector = listContext.isOrdered ? 'ol' : 'ul';
-    const lists = container.querySelectorAll(listSelector);
-    
-    for (const list of lists) {
-      // Check if list properties match
-      if (listContext.isOrdered) {
-        const startMatch = list.getAttribute('start') === listContext.listStart;
-        const reversedMatch = list.hasAttribute('reversed') === listContext.listReversed;
-        if (!startMatch || !reversedMatch) continue;
-      }
-      
-      const items = Array.from(list.children);
-      // Try to find the matching list item
-      for (const item of items) {
-        if (item.textContent.includes(clip.text)) {
-          targetElement = item;
-          break;
-        }
-      }
-      if (targetElement) break;
-    }
-  }
-  // Handle other elements
-  else {
-    // Existing logic for other elements
-    const elements = container.querySelectorAll(`${elementContext.type}.${elementContext.classes.split(' ').join('.')}`);
-    for (const el of elements) {
-      if (el.textContent.includes(clip.text)) {
-        targetElement = el;
-        break;
-      }
-    }
-  }
-
-  if (!targetElement) return false;
-
-  // Create range and highlight
-  const range = document.createRange();
-  const textNode = findTextNode(targetElement, clip.text);
-  if (!textNode) return false;
-
-  range.setStart(textNode, clip.startOffset);
-  range.setEnd(textNode, clip.endOffset);
-  
-  highlightRange(range);
-  return true;
-}
-
-// Helper function to find text node containing the target text
-function findTextNode(element, targetText) {
-  const walker = document.createTreeWalker(
-    element,
-    NodeFilter.SHOW_TEXT,
-    null,
-    false
-  );
-  
-  let node;
-  while (node = walker.nextNode()) {
-    if (node.textContent.includes(targetText)) {
-      return node;
-    }
-  }
-  return null;
-}
-
-// --- Label Storage Functions ---
-async function getLabels() {
+// --- Topic Storage Functions ---
+async function getTopics() {
     return new Promise((resolve) => {
-        chrome.storage.local.get(['cairnLabels'], (result) => {
-            resolve(result.cairnLabels || []);
+        chrome.storage.local.get(['cairnTopics'], (result) => {
+            resolve(result.cairnTopics || []);
         });
     });
 }
 
-async function addLabel(newLabel) {
-    return new Promise(async (resolve) => {
-        const existingLabels = await getLabels();
-        if (!existingLabels.includes(newLabel)) {
-            const updatedLabels = [...existingLabels, newLabel].sort(); // Keep sorted
-            chrome.storage.local.set({ 'cairnLabels': updatedLabels }, () => {
-                console.log('Added new label:', newLabel);
-                resolve();
-            });
-        } else {
-            resolve(); // Label already exists
-        }
+// Get-or-create by exact name match; returns the topic object so callers get its id.
+async function addTopic(name) {
+    const existingTopics = await getTopics();
+    const existing = existingTopics.find((t) => t.name === name);
+    if (existing) return existing;
+    const topic = { id: crypto.randomUUID(), name, createdAt: new Date().toISOString() };
+    const updated = [...existingTopics, topic].sort((a, b) => a.name.localeCompare(b.name));
+    return new Promise((resolve) => {
+        chrome.storage.local.set({ 'cairnTopics': updated }, () => resolve(topic));
     });
+}
+
+// One-time migration from the legacy flat cairnLabels string array + clip.label
+// to real cairnTopics entities + clip.topicId. Idempotent: no-ops once cairnTopics exists.
+function migrateLabelsToTopics(callback) {
+    chrome.storage.local.get(['cairnTopics', 'cairnLabels', 'cairnNotesV2'], (result) => {
+        if (result.cairnTopics) {
+            callback();
+            return;
+        }
+
+        const notes = result.cairnNotesV2 || {};
+        const labelNames = new Set(result.cairnLabels || []);
+        Object.values(notes).forEach((bucket) => {
+            (bucket.clips || []).forEach((clip) => {
+                if (clip.label) labelNames.add(clip.label);
+            });
+        });
+
+        const topics = [...labelNames].sort().map((name) => ({
+            id: crypto.randomUUID(),
+            name,
+            createdAt: new Date().toISOString()
+        }));
+        const nameToId = new Map(topics.map((t) => [t.name, t.id]));
+
+        Object.values(notes).forEach((bucket) => {
+            (bucket.clips || []).forEach((clip) => {
+                if (clip.label) {
+                    clip.topicId = nameToId.get(clip.label);
+                    delete clip.label;
+                }
+            });
+        });
+
+        chrome.storage.local.set({ cairnTopics: topics, cairnNotesV2: notes }, () => {
+            chrome.storage.local.remove('cairnLabels', callback);
+        });
+    });
+}
+
+// Shared by the redesigned Add-to-Topic modal and comment popover
+const PANEL_CLOSE_ICON = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>';
+
+function createPanelFooter(saveBtn, cancelBtn) {
+  const footer = document.createElement('div');
+  applyStyles(footer, {
+    display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 16px',
+    borderTop: `1px solid ${panel.colors.border}`, background: panel.colors.bg
+  });
+  const hint = document.createElement('span');
+  applyStyles(hint, { fontSize: '12px', color: panel.colors.subtext, display: 'flex', alignItems: 'center', gap: '4px' });
+  const kbd = document.createElement('kbd');
+  kbd.textContent = '⌘ ↵';
+  applyStyles(kbd, {
+    font: `500 11px ${panel.font.sans}`, background: panel.colors.card,
+    border: `1px solid ${panel.colors.borderStrong}`, borderRadius: '5px',
+    padding: '1px 5px', color: panel.colors.subtext2
+  });
+  hint.appendChild(kbd);
+  hint.appendChild(document.createTextNode(' to save'));
+  const spacer = document.createElement('div');
+  spacer.style.flexGrow = '1';
+  footer.append(hint, spacer, cancelBtn, saveBtn);
+  return footer;
+}
+
+function createPanelFooterButtons(label) {
+  const cancelBtn = document.createElement('button');
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.className = 'cairn-ghost-btn';
+  applyStyles(cancelBtn, {
+    height: '38px', padding: '0 14px', border: '0', borderRadius: '10px',
+    background: 'transparent', color: panel.colors.subtext2,
+    font: `500 13px ${panel.font.sans}`, cursor: 'pointer'
+  });
+  const saveBtn = document.createElement('button');
+  saveBtn.textContent = label;
+  saveBtn.className = 'cairn-primary-btn';
+  applyStyles(saveBtn, {
+    height: '38px', padding: '0 16px', border: '0', borderRadius: '10px',
+    background: panel.colors.accent, color: '#FFFFFF',
+    font: `500 13px ${panel.font.sans}`, cursor: 'pointer'
+  });
+  return { cancelBtn, saveBtn };
+}
+
+function createPanelSectionLabel(text, forId) {
+  const el = document.createElement(forId ? 'label' : 'div');
+  if (forId) el.htmlFor = forId;
+  el.textContent = text;
+  applyStyles(el, {
+    fontSize: '12px', fontWeight: '600', color: panel.colors.subtext,
+    letterSpacing: '0.04em', textTransform: 'uppercase'
+  });
+  return el;
 }
 
 // Open a lightweight comment popover anchored below the selection
 function openCommentPopover(selectedText, selectionRect, range) {
+  injectPanelStyles();
   // Remove any existing comment popover
   const existing = document.getElementById('cairn-comment-popover');
   if (existing) existing.remove();
+
+  const popoverWidth = 360;
+  const maxLeft = window.scrollX + document.documentElement.clientWidth - popoverWidth - 8;
+  const left = Math.max(window.scrollX + 8, Math.min(selectionRect.left + window.scrollX, maxLeft));
 
   const popover = document.createElement('div');
   popover.id = 'cairn-comment-popover';
   applyStyles(popover, {
     position: 'absolute',
-    left: `${selectionRect.left + window.scrollX}px`,
+    left: `${left}px`,
     top: `${selectionRect.bottom + window.scrollY + 16}px`,
-    width: '320px',
-    backgroundColor: styles.colors.background.white,
-    border: `1px solid ${styles.colors.border}`,
-    borderRadius: '8px',
-    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-    zIndex: '10002',
-    fontFamily: "'Lato', Arial, sans-serif",
-    fontSize: '14px',
-    color: styles.colors.text.dark,
+    width: `${popoverWidth}px`,
+    minHeight: '340px',
+    boxSizing: 'border-box',
     display: 'flex',
     flexDirection: 'column',
-    gap: styles.spacing.sm,
-    padding: styles.spacing.md
+    background: panel.colors.bg,
+    border: `1px solid ${panel.colors.borderStrong}`,
+    borderRadius: '16px',
+    overflow: 'hidden',
+    boxShadow: '0 12px 32px rgba(28,38,36,.12)',
+    zIndex: '10002',
+    fontFamily: panel.font.sans,
+    fontSize: '14px',
+    color: panel.colors.text
   });
 
-  // Selected text preview styled like the existing highlight
-  const preview = document.createElement('div');
-  preview.textContent = selectedText;
-  applyStyles(preview, {
-    padding: `${styles.spacing.sm} ${styles.spacing.sm} ${styles.spacing.sm} 10px`,
-    borderLeft: `3px solid ${styles.colors.primary}`,
-    backgroundColor: 'rgba(201, 100, 66, 0.04)',
-    borderRadius: '0 2px 2px 0',
-    fontSize: '0.875rem',
-    lineHeight: '1.4',
-    maxHeight: '80px',
-    overflowY: 'auto',
+  // Header
+  const header = document.createElement('div');
+  applyStyles(header, { display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 10px 8px 16px' });
+  const title = document.createElement('div');
+  title.textContent = 'Add comment';
+  applyStyles(title, { fontSize: '15px', fontWeight: '600', letterSpacing: '-0.01em', flexGrow: '1' });
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'cairn-ib';
+  closeBtn.setAttribute('aria-label', 'Close');
+  closeBtn.innerHTML = PANEL_CLOSE_ICON;
+  applyStyles(closeBtn, panelIconButtonStyle());
+  header.append(title, closeBtn);
+
+  // Body
+  const body = document.createElement('div');
+  applyStyles(body, { flexGrow: '1', display: 'flex', flexDirection: 'column', gap: '12px', padding: '4px 16px 16px' });
+
+  const quote = document.createElement('div');
+  applyStyles(quote, {
+    display: 'flex', gap: '10px', alignItems: 'flex-start', background: panel.colors.card,
+    border: `1px solid ${panel.colors.border}`, borderRadius: '10px', padding: '10px 12px'
+  });
+  quote.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#5D6A67" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;margin-top:3px"><path d="M5 5h14v10H10l-4 4v-4H5z"></path></svg>';
+  const quoteText = document.createElement('p');
+  quoteText.textContent = `“${selectedText}”`;
+  applyStyles(quoteText, {
+    margin: '0', fontFamily: panel.font.serif, fontStyle: 'italic', fontSize: '15px',
+    lineHeight: '1.4', color: panel.colors.subtext2, maxHeight: '80px', overflowY: 'auto',
     wordBreak: 'break-word'
   });
+  quote.appendChild(quoteText);
 
-  // Textarea for the comment
+  const fieldWrap = document.createElement('div');
+  applyStyles(fieldWrap, { display: 'flex', flexDirection: 'column', gap: '6px', flexGrow: '1' });
   const textarea = document.createElement('textarea');
-  textarea.placeholder = 'Write a comment...';
+  textarea.id = 'cairn-comment-input';
+  textarea.className = 'cairn-field';
+  textarea.placeholder = sendCommentToInput
+    ? "Write your response and we'll save and populate the response in the chat"
+    : 'Write a comment...';
   applyStyles(textarea, {
-    width: '100%',
-    minHeight: '80px',
-    padding: styles.spacing.sm,
-    border: `1px solid ${styles.colors.border}`,
-    borderRadius: '4px',
-    fontSize: '14px',
-    fontFamily: 'inherit',
-    resize: 'vertical',
-    boxSizing: 'border-box',
-    outline: 'none'
+    flexGrow: '1', minHeight: '110px', resize: 'none', boxSizing: 'border-box', padding: '10px 12px',
+    border: '1px solid #D3DAD7', borderRadius: '10px', background: panel.colors.card,
+    color: panel.colors.text, font: `400 14px/1.45 ${panel.font.sans}`
   });
-  textarea.addEventListener('focus', () => {
-    textarea.style.borderColor = styles.colors.primary;
-  });
-  textarea.addEventListener('blur', () => {
-    textarea.style.borderColor = styles.colors.border;
-  });
+  fieldWrap.append(createPanelSectionLabel('Comment', 'cairn-comment-input'), textarea);
+  body.append(quote, fieldWrap);
 
-  // Action row
-  const actions = document.createElement('div');
-  applyStyles(actions, {
-    display: 'flex',
-    justifyContent: 'flex-end',
-    gap: styles.spacing.sm
-  });
+  const { cancelBtn, saveBtn } = createPanelFooterButtons('Save');
+  popover.append(header, body, createPanelFooter(saveBtn, cancelBtn));
 
-  const cancelBtn = document.createElement('button');
-  cancelBtn.textContent = 'Cancel';
-  applyStyles(cancelBtn, createStyleObject(baseStyles.actionButton, {
-    backgroundColor: styles.colors.text.normal,
-    fontSize: '13px',
-    padding: `${styles.spacing.xs} ${styles.spacing.sm}`
-  }));
-
-  const saveBtn = document.createElement('button');
-  saveBtn.textContent = 'Save';
-  applyStyles(saveBtn, createStyleObject(baseStyles.actionButton, {
-    backgroundColor: styles.colors.primary,
-    fontSize: '13px',
-    padding: `${styles.spacing.xs} ${styles.spacing.sm}`
-  }));
-
-  cancelBtn.addEventListener('click', () => {
+  const close = () => {
     popover.remove();
     document.removeEventListener('mousedown', onOutsideClick);
-  });
+  };
+  closeBtn.addEventListener('click', close);
+  cancelBtn.addEventListener('click', close);
 
   saveBtn.addEventListener('click', () => {
     const commentText = textarea.value.trim();
     if (!commentText) {
-      textarea.style.borderColor = '#f44336';
+      textarea.style.borderColor = panel.colors.danger;
       textarea.focus();
       return;
     }
     saveComment(selectedText, commentText, range);
-    popover.remove();
-    document.removeEventListener('mousedown', onOutsideClick);
+    close();
     if (sendCommentToInput) {
       setTimeout(() => sendToClaudeInput(`> "${selectedText}"\n\n${commentText}`), 50);
     }
   });
 
-  actions.appendChild(cancelBtn);
-  actions.appendChild(saveBtn);
-
-  const commentHint = document.createElement('div');
-  commentHint.textContent = '⌘ Return to save';
-  applyStyles(commentHint, {
-    fontSize: '0.7rem',
-    color: styles.colors.text.normal,
-    textAlign: 'right',
-    marginTop: '4px',
-    opacity: '0.7'
-  });
-
-  popover.appendChild(preview);
-  popover.appendChild(textarea);
-  popover.appendChild(actions);
-  popover.appendChild(commentHint);
   document.body.appendChild(popover);
   textarea.focus();
 
@@ -3181,10 +3920,7 @@ function openCommentPopover(selectedText, selectionRect, range) {
 
   // Close when clicking outside
   const onOutsideClick = (e) => {
-    if (!popover.contains(e.target)) {
-      popover.remove();
-      document.removeEventListener('mousedown', onOutsideClick);
-    }
+    if (!popover.contains(e.target)) close();
   };
   // Use setTimeout so the current mousedown event doesn't immediately close it
   setTimeout(() => document.addEventListener('mousedown', onOutsideClick), 0);
@@ -3207,208 +3943,284 @@ function saveComment(selectedText, commentText, range) {
 
   allClips[currentConversationId].comments = comments;
   allClips[currentConversationId].lastUpdated = new Date().toISOString();
-  chrome.storage.local.set({ 'cairnNotesV2': allClips }, () => {
-    console.log('Cairn:Comment saved to conversation', currentConversationId);
-  });
+  chrome.storage.local.set({ 'cairnNotesV2': allClips });
 
   // Switch to comments tab and show modal
   activeTab = 'comments';
   if (noteModal) {
     noteModal.style.display = 'flex';
-    // Sync tab button styles
-    const tabLabels = { clips: 'Clips', annotations: 'Annotations', comments: 'Comments' };
-    noteModal.querySelectorAll('button').forEach(tab => {
-      if (tab.textContent === tabLabels['comments']) {
-        tab.style.fontWeight = 'bold';
-        tab.style.borderBottom = `2px solid ${styles.colors.primary}`;
-      } else if (Object.values(tabLabels).includes(tab.textContent)) {
-        tab.style.fontWeight = 'normal';
-        tab.style.borderBottom = '2px solid transparent';
-      }
-    });
   }
   updateModalContent();
 }
 
 // New function
-async function openAnnotationModal(selection, isCodeBlock) {
+async function openAnnotationModal(selection, isCodeBlock, quiet = false) {
     // Store selection info immediately
     const selectedText = selection.toString().trim();
     if (!selectedText) return; // Don't open if selection disappeared
     const range = selection.getRangeAt(0).cloneRange(); // Clone range for later use
+    injectPanelStyles();
 
     // --- Create Modal Elements ---
     const annotationModal = document.createElement('div');
     annotationModal.id = 'cairn-annotation-modal';
-    applyStyles(annotationModal, createStyleObject(baseStyles.modal, {
+    applyStyles(annotationModal, {
+        position: 'fixed',
         top: '50%',
         left: '50%',
-        transform: 'translate(-50%, -50%)', // Center the modal
-        width: '400px',
-        maxHeight: '80vh', // Limit height
+        transform: 'translate(-50%, -50%)',
+        width: '360px',
+        maxWidth: 'calc(100vw - 32px)',
+        maxHeight: '80vh',
+        boxSizing: 'border-box',
+        display: 'flex',
+        flexDirection: 'column',
+        background: panel.colors.bg,
+        border: `1px solid ${panel.colors.borderStrong}`,
+        borderRadius: '16px',
+        overflow: 'hidden',
+        boxShadow: '0 12px 32px rgba(28,38,36,.12)',
         zIndex: '10002', // Ensure it's above the main modal
-        display: 'flex' // Make sure it's visible
-    }));
+        fontFamily: panel.font.sans,
+        fontSize: '14px',
+        color: panel.colors.text
+    });
+    const closeModal = () => annotationModal.remove();
 
     // Header
     const modalHeader = document.createElement('div');
-    applyStyles(modalHeader, baseStyles.header);
-    const modalTitle = document.createElement('span');
-    modalTitle.textContent = 'Add Label to Annotation';
-    applyStyles(modalTitle, { fontWeight: 'bold' });
+    applyStyles(modalHeader, { display: 'flex', alignItems: 'center', gap: '10px', padding: '14px 10px 10px 16px' });
+    const headerIcon = document.createElement('div');
+    applyStyles(headerIcon, {
+        width: '30px', height: '30px', borderRadius: '9px', background: panel.colors.iconBg,
+        color: panel.colors.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: '0'
+    });
+    headerIcon.innerHTML = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><ellipse cx="12" cy="18.5" rx="8" ry="3"></ellipse><ellipse cx="12" cy="12.6" rx="5.8" ry="2.6"></ellipse><ellipse cx="12" cy="7.2" rx="3.6" ry="2.2" fill="currentColor"></ellipse></svg>';
+    const modalTitle = document.createElement('div');
+    modalTitle.textContent = 'Add to topic';
+    applyStyles(modalTitle, { fontSize: '15px', fontWeight: '600', letterSpacing: '-0.01em', flexGrow: '1' });
     const closeButton = document.createElement('button');
-    applyStyles(closeButton, baseStyles.button);
-    closeButton.appendChild(CairnIcons.createIcon('x', 20, styles.colors.text.normal));
-    closeButton.onclick = () => document.body.removeChild(annotationModal);
-    modalHeader.appendChild(modalTitle);
-    modalHeader.appendChild(closeButton);
+    closeButton.className = 'cairn-ib';
+    closeButton.setAttribute('aria-label', 'Close');
+    closeButton.innerHTML = PANEL_CLOSE_ICON;
+    applyStyles(closeButton, panelIconButtonStyle());
+    closeButton.onclick = closeModal;
+    modalHeader.append(headerIcon, modalTitle, closeButton);
 
     // Content Area
     const modalContent = document.createElement('div');
-    applyStyles(modalContent, createStyleObject(baseStyles.content, { display: 'flex', flexDirection: 'column', gap: styles.spacing.md }));
-
-    // Preview Section
-    const previewLabel = document.createElement('div');
-    previewLabel.textContent = 'Selected text:';
-    applyStyles(previewLabel, { fontWeight: 'bold' });
-    const preview = document.createElement('div');
-    preview.textContent = selectedText;
-    applyStyles(preview, {
-        padding: styles.spacing.sm,
-        backgroundColor: styles.colors.background.light,
-        borderRadius: '4px',
-        fontSize: '0.875rem',
-        maxHeight: '150px', // Limit preview height
-        overflowY: 'auto'
+    applyStyles(modalContent, {
+        flexGrow: '1', overflowY: 'auto', padding: '4px 16px 16px',
+        display: 'flex', flexDirection: 'column', gap: '16px'
     });
 
-    // Labeling Section
-    const labelingSection = document.createElement('div');
-    applyStyles(labelingSection, { display: 'flex', flexDirection: 'column', gap: styles.spacing.sm });
-    
-    const existingLabels = await getLabels(); // Fetch existing labels (async)
-    let labelSelect;
-    
-    if (existingLabels.length > 0) {
-        const selectLabelText = document.createElement('label');
-        selectLabelText.textContent = 'Select existing label:';
-        applyStyles(selectLabelText, { fontSize: '0.9rem', color: styles.colors.text.normal });
-        
-        labelSelect = document.createElement('select');
-        applyStyles(labelSelect, { padding: styles.spacing.sm, border: `1px solid ${styles.colors.border}`, borderRadius: '4px' });
-        
-        // Add a default "Select..." option
-        const defaultOption = document.createElement('option');
-        defaultOption.value = "";
-        defaultOption.textContent = "-- Select existing --";
-        labelSelect.appendChild(defaultOption);
+    // Selected text card
+    const previewCard = document.createElement('div');
+    applyStyles(previewCard, {
+        background: panel.colors.card, border: `1px solid ${panel.colors.border}`, borderRadius: '12px',
+        padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '6px'
+    });
+    const sourceLabel = getBucketSourceLabel(getBucketId());
+    const sourceRow = document.createElement('div');
+    applyStyles(sourceRow, { display: 'flex', alignItems: 'center', gap: '7px' });
+    const sourceDot = document.createElement('span');
+    applyStyles(sourceDot, {
+        width: '7px', height: '7px', borderRadius: '50%',
+        background: panel.sourceColors[sourceLabel] || panel.colors.muted
+    });
+    const sourceName = document.createElement('span');
+    sourceName.textContent = sourceLabel;
+    applyStyles(sourceName, { fontSize: '12px', fontWeight: '600', color: panel.colors.subtext2 });
+    const sourceHint = document.createElement('span');
+    sourceHint.textContent = 'Selected text';
+    applyStyles(sourceHint, { fontSize: '12px', color: panel.colors.subtext });
+    sourceRow.append(sourceDot, sourceName, sourceHint);
+    const preview = document.createElement('p');
+    preview.textContent = selectedText;
+    applyStyles(preview, {
+        margin: '0', fontFamily: panel.font.serif, fontSize: '15px', lineHeight: '1.5',
+        color: panel.colors.text, maxHeight: '150px', overflowY: 'auto', wordBreak: 'break-word'
+    });
+    previewCard.append(sourceRow, preview);
 
-        // Add existing labels
-        existingLabels.forEach(label => {
-            const option = document.createElement('option');
-            option.value = label;
-            option.textContent = label;
-            labelSelect.appendChild(option);
+    // Topic chips
+    const existingTopics = await getTopics();
+    let selectedTopicId = '';
+    // Last topic saved to stays selected across modal opens (and across sites, via chrome.storage)
+    const lastTopicId = await new Promise(resolve =>
+        chrome.storage.local.get('cairnLastTopicId', r => resolve(r.cairnLastTopicId || '')));
+
+    const chipsSection = document.createElement('div');
+    applyStyles(chipsSection, { display: 'flex', flexDirection: 'column', gap: '8px' });
+    const chipsWrap = document.createElement('div');
+    applyStyles(chipsWrap, { display: 'flex', flexWrap: 'wrap', gap: '6px' });
+    const chipButtons = new Map();
+
+    const styleChip = (chip, pressed) => {
+        chip.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+        applyStyles(chip, {
+            height: '32px', padding: '0 13px', borderRadius: '16px',
+            font: `500 12.5px ${panel.font.sans}`, cursor: 'pointer',
+            background: pressed ? panel.colors.accent : panel.colors.card,
+            color: pressed ? '#FFFFFF' : panel.colors.subtext2,
+            border: `1px solid ${pressed ? panel.colors.accent : panel.colors.borderStrong}`
         });
-        labelingSection.appendChild(selectLabelText);
-        labelingSection.appendChild(labelSelect);
+    };
+    const selectTopic = (id) => {
+        selectedTopicId = id;
+        chipButtons.forEach((chip, chipId) => styleChip(chip, chipId === id));
+    };
+    const addChip = (topic) => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'cairn-chip';
+        chip.textContent = topic.name;
+        styleChip(chip, false);
+        chip.onclick = () => selectTopic(topic.id === selectedTopicId ? '' : topic.id);
+        chipButtons.set(topic.id, chip);
+        chipsWrap.appendChild(chip);
+    };
+    existingTopics.forEach(addChip);
+    if (lastTopicId && chipButtons.has(lastTopicId)) selectTopic(lastTopicId);
+    if (existingTopics.length > 0) {
+        chipsSection.append(createPanelSectionLabel('Your topics'), chipsWrap);
     }
 
-    const newLabelLabel = document.createElement('label');
-    newLabelLabel.textContent = existingLabels.length > 0 ? 'Or add new label:' : 'Add label:';
-     applyStyles(newLabelLabel, { fontSize: '0.9rem', color: styles.colors.text.normal, marginTop: existingLabels.length > 0 ? styles.spacing.sm : '0' });
-    
+    // New topic input
+    const newSection = document.createElement('div');
+    applyStyles(newSection, { display: 'flex', flexDirection: 'column', gap: '8px' });
+    const inputRow = document.createElement('div');
+    applyStyles(inputRow, { display: 'flex', gap: '8px' });
     const labelInput = document.createElement('input');
+    labelInput.id = 'cairn-new-topic';
+    labelInput.className = 'cairn-field';
     labelInput.type = 'text';
-    labelInput.placeholder = 'Enter new label...';
-    applyStyles(labelInput, { padding: styles.spacing.sm, border: `1px solid ${styles.colors.border}`, borderRadius: '4px' });
-    labelingSection.appendChild(newLabelLabel);
-    labelingSection.appendChild(labelInput);
+    labelInput.placeholder = 'Topic name';
+    applyStyles(labelInput, {
+        flexGrow: '1', minWidth: '0', height: '40px', boxSizing: 'border-box', padding: '0 12px',
+        border: '1px solid #D3DAD7', borderRadius: '10px', background: panel.colors.card,
+        color: panel.colors.text, font: `400 14px ${panel.font.sans}`
+    });
+    const createTopicButton = document.createElement('button');
+    createTopicButton.type = 'button';
+    createTopicButton.className = 'cairn-ghost-btn';
+    createTopicButton.setAttribute('aria-label', 'Create topic');
+    createTopicButton.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>';
+    applyStyles(createTopicButton, {
+        width: '40px', height: '40px', flexShrink: '0', border: '1px solid #D3DAD7', borderRadius: '10px',
+        background: panel.colors.card, color: panel.colors.subtext2, display: 'flex',
+        alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '0'
+    });
+    inputRow.append(labelInput, createTopicButton);
+    newSection.append(
+        createPanelSectionLabel(existingTopics.length > 0 ? 'Or start a new one' : 'Start a topic', 'cairn-new-topic'),
+        inputRow
+    );
 
-    // Action Buttons
-    const modalActions = document.createElement('div');
-    applyStyles(modalActions, createStyleObject(baseStyles.actions, { borderTop: 'none', paddingTop: '0' })); // No border needed here
-    
-    const cancelButton = document.createElement('button');
-    cancelButton.textContent = 'Cancel';
-    applyStyles(cancelButton, createStyleObject(baseStyles.actionButton, { backgroundColor: styles.colors.text.normal }));
-    cancelButton.onclick = () => document.body.removeChild(annotationModal);
+    // "+" creates the topic now and selects it as a chip
+    const createTopicFromInput = async () => {
+        const name = labelInput.value.trim();
+        if (!name) {
+            labelInput.focus();
+            return;
+        }
+        const topic = await addTopic(name);
+        topicsCache = await getTopics();
+        if (!chipButtons.has(topic.id)) {
+            if (!chipsSection.contains(chipsWrap)) chipsSection.append(createPanelSectionLabel('Your topics'), chipsWrap);
+            addChip(topic);
+        }
+        selectTopic(topic.id);
+        labelInput.value = '';
+    };
+    createTopicButton.onclick = createTopicFromInput;
+    labelInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.metaKey) {
+            e.preventDefault();
+            createTopicFromInput();
+        }
+    });
 
-    const saveButton = document.createElement('button');
-    saveButton.textContent = 'Save Annotation';
-    applyStyles(saveButton, createStyleObject(baseStyles.actionButton, { backgroundColor: styles.colors.primary }));
+    // Footer
+    const { cancelBtn: cancelButton, saveBtn: saveButton } = createPanelFooterButtons('Save');
+    cancelButton.onclick = closeModal;
     saveButton.onclick = async () => {
-        let chosenLabel = "";
-        // Prioritize dropdown selection if it exists and has a value
-        if (labelSelect && labelSelect.value) {
-            chosenLabel = labelSelect.value;
-        } else {
-            chosenLabel = labelInput.value.trim();
+        let topicId = selectedTopicId;
+        // A typed-but-not-yet-added name takes priority over the selected chip
+        const newTopicName = labelInput.value.trim();
+        if (newTopicName) {
+            const topic = await addTopic(newTopicName);
+            topicId = topic.id;
+            topicsCache = await getTopics();
         }
 
-        if (!chosenLabel) {
-            alert("Please select or enter a label.");
+        if (!topicId) {
+            labelInput.style.borderColor = panel.colors.danger;
+            labelInput.focus();
             return;
         }
 
-        // If it's a new label, add it to the global list
-        if (!existingLabels.includes(chosenLabel)) {
-            await addLabel(chosenLabel); 
-        }
+        // --- Save the clip with the topic ---
+        // Multi-paragraph selections need to be split into a multi-element clip
+        // (like saveClip does) so applyHighlights can restore them on reload —
+        // a single elementContext locator can't match text spanning several blocks.
+        const dedupedBlocks = findIntersectingBlocks(range);
+        let clip;
 
-        // --- Save the clip with the label ---
-        const clipRangeInfo = getRangeInfo(range); // Get context for the original range
-        if (!clipRangeInfo) {
-             console.error("Could not get range info for annotation.");
-             alert("Error saving annotation context. Please try again.");
-             document.body.removeChild(annotationModal);
-             return;
-        }
+        if (dedupedBlocks.length > 0) {
+            clip = createMultiElementClip(dedupedBlocks, selectedText, isCodeBlock, true, currentClipId);
+            if (!supportsElementHighlights()) {
+              clip.range = null;
+            }
+        } else {
+            const clipRangeInfo = supportsElementHighlights() ? getRangeInfo(range) : null;
+            if (supportsElementHighlights() && !clipRangeInfo) {
+                 console.error("Could not get range info for annotation.");
+                 alert("Error saving annotation context. Please try again.");
+                 closeModal();
+                 return;
+            }
 
-        const clip = createClipObject(
-            range, 
-            selectedText, 
-            isCodeBlock, 
-            true, // Mark as secondary/annotation
-            currentClipId, // Use the current global ID
-            clipRangeInfo.elementContext.isList // Pass isList flag from context
-        );
-        clip.label = chosenLabel; // Add the label property
+            clip = createClipObject(
+                range,
+                selectedText,
+                isCodeBlock,
+                true, // Mark as secondary/annotation
+                currentClipId // Use the current global ID
+            );
+        }
+        clip.topicId = topicId; // Add the topic reference
+        chrome.storage.local.set({ cairnLastTopicId: topicId });
 
         clips.push(clip);
         currentClipId++; // Increment AFTER assigning
 
-        highlightText(range, clip.id, clip.isCode, clip.isSecondary);
-        updateStorageAndUI(); // Save to storage and update main modal
+        if (supportsElementHighlights()) {
+          if (dedupedBlocks.length > 0) {
+            dedupedBlocks.forEach(block => {
+              const r = document.createRange();
+              r.selectNodeContents(block);
+              highlightClipText(r, clip.id, clip.isSecondary);
+            });
+          } else {
+            highlightText(range, clip.id, clip.isCode, clip.isSecondary);
+          }
+        }
+        updateStorageAndUI(quiet); // Save to storage and update main modal
+        if (quiet) {
+            const topic = topicsCache.find(t => t.id === topicId);
+            showCairnToast(topic ? `Added to “${topic.name}”` : 'Added to topic', 'annotations');
+        }
 
-        document.body.removeChild(annotationModal); // Close this modal
+        closeModal();
     };
 
-    modalActions.appendChild(cancelButton);
-    modalActions.appendChild(saveButton);
-
-    const annotationHint = document.createElement('div');
-    annotationHint.textContent = '⌘ Return to save';
-    applyStyles(annotationHint, {
-      fontSize: '0.7rem',
-      color: styles.colors.text.normal,
-      textAlign: 'right',
-      marginTop: '4px',
-      opacity: '0.7'
-    });
-
     // --- Assemble Modal ---
-    modalContent.appendChild(previewLabel);
-    modalContent.appendChild(preview);
-    modalContent.appendChild(labelingSection);
-    annotationModal.appendChild(modalHeader);
-    annotationModal.appendChild(modalContent);
-    annotationModal.appendChild(modalActions);
-    annotationModal.appendChild(annotationHint);
-
-    // Add to document
+    modalContent.append(previewCard, chipsSection, newSection);
+    annotationModal.append(modalHeader, modalContent, createPanelFooter(saveButton, cancelButton));
     document.body.appendChild(annotationModal);
-    labelInput.focus(); // Focus the input field
+    // With a remembered topic, land on Save so Enter / ⌘↵ completes the flow immediately
+    (selectedTopicId ? saveButton : existingTopics.length > 0 ? chipsWrap.firstChild : labelInput).focus();
 
     annotationModal.addEventListener('keydown', (e) => {
       if (e.metaKey && e.key === 'Enter') {
@@ -3416,4 +4228,4 @@ async function openAnnotationModal(selection, isCodeBlock) {
         saveButton.click();
       }
     });
-} 
+}

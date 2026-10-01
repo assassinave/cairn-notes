@@ -12,63 +12,78 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
-// Set up action for toolbar icon clicks - toggle the notes panel
-chrome.action.onClicked.addListener((tab) => {
-  // For Claude.ai tabs, toggle the notes panel
-  if (tab.url.includes('claude.ai')) {
-    console.log('Toggling notes panel on Claude.ai tab');
-    
-    // First try to send a message to the content script
-    chrome.tabs.sendMessage(
-      tab.id,
-      { action: 'toggleModal' },
-      (response) => {
-        // If there's an error (content script not ready), try to inject and initialize
-        if (chrome.runtime.lastError) {
-          console.error('Error toggling modal:', chrome.runtime.lastError);
-          
-          // Inject content script if it's not already loaded
+function openLibraryTab() {
+  chrome.tabs.create({
+    url: chrome.runtime.getURL('library.html')
+  });
+}
+
+function isRestrictedUrl(url) {
+  if (!url) return true;
+  return (
+    url.startsWith('chrome://') ||
+    url.startsWith('chrome-extension://') ||
+    url.startsWith('edge://') ||
+    url.startsWith('about:') ||
+    url.startsWith('devtools://')
+  );
+}
+
+/** Toggle in-page Notes / Library panel; fall back to opening Library. */
+function togglePanelOrOpenLibrary(tab) {
+  if (!tab?.id || isRestrictedUrl(tab.url)) {
+    openLibraryTab();
+    return;
+  }
+
+  chrome.tabs.sendMessage(
+    tab.id,
+    { action: 'toggleModal' },
+    (response) => {
+      if (chrome.runtime.lastError) {
+        console.error('Error toggling panel:', chrome.runtime.lastError);
+
+        // No receiver (e.g. tab opened before install/reload): inject once and retry
+        if (tab.url && /^https?:/.test(tab.url)) {
           chrome.scripting.executeScript({
             target: { tabId: tab.id },
             files: ['content.js']
           }).then(() => {
-            console.log('Content script injected, now trying to toggle modal again');
-            // After injecting, try toggling the modal again after a short delay
             setTimeout(() => {
               chrome.tabs.sendMessage(
                 tab.id,
                 { action: 'toggleModal' },
-                (response) => {
-                  if (chrome.runtime.lastError) {
-                    console.error('Still could not toggle modal:', chrome.runtime.lastError);
-                    showNotification('Error', 'Could not display notes panel');
-                  } else if (response && !response.success) {
-                    // Handle error response from content script
-                    console.log('Modal toggle failed:', response.error);
-                    showNotification('Cairn Notes', response.error || 'Please open a conversation to use Cairn Notes');
-                  } else {
-                    console.log('Modal toggled after injection');
+                (retryResponse) => {
+                  if (chrome.runtime.lastError || (retryResponse && !retryResponse.success)) {
+                    console.error('Still could not toggle modal:', chrome.runtime.lastError || retryResponse?.error);
+                    openLibraryTab();
                   }
                 }
               );
             }, 300);
-          }).catch(err => {
+          }).catch((err) => {
             console.error('Could not inject content script:', err);
-            showNotification('Error', 'Could not initialize Cairn Notes');
+            openLibraryTab();
           });
-        } else if (response && !response.success) {
-          // Handle error response from content script
-          console.log('Modal toggle failed:', response.error);
-          showNotification('Cairn Notes', response.error || 'Please open a conversation to use Cairn Notes');
-        } else {
-          console.log('Modal toggled successfully');
+          return;
         }
+
+        // Non-web pages: open Library
+        openLibraryTab();
+        return;
       }
-    );
-  } else {
-    // Notify user that the extension only works on Claude.ai
-    showNotification('Cairn Notes', 'This extension only works on Claude.ai');
-  }
+
+      if (response && !response.success) {
+        console.log('Panel toggle failed:', response.error);
+        openLibraryTab();
+      }
+    }
+  );
+}
+
+// Toolbar icon: toggle Notes / Library access panel on the page
+chrome.action.onClicked.addListener((tab) => {
+  togglePanelOrOpenLibrary(tab);
 });
 
 // Helper function to show notifications
@@ -98,8 +113,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         (response) => {
           if (chrome.runtime.lastError) {
             console.error('Error sending toggleModal back to content script:', chrome.runtime.lastError.message);
-            // We might not be able to show notification if tab context is weird
-            // showNotification('Error', 'Could not toggle notes panel.');
             sendResponse({ success: false, error: chrome.runtime.lastError.message });
           } else if (response && !response.success) {
             console.log('Content script failed to toggle modal:', response.error);
@@ -130,11 +143,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.action === 'openLibrary') {
-    // Open the library in a new tab
-    chrome.tabs.create({
-      url: chrome.runtime.getURL('library.html')
-    });
+    openLibraryTab();
     sendResponse({success: true});
     return true;
   }
-}); 
+});

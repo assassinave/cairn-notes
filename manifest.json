@@ -2,9 +2,9 @@
   "manifest_version": 3,
   "name": "Cairn Notes",
   "version": "2.0.0",
-  "description": "Capture, organize, and revisit valuable AI text responses from Claude.ai",
+  "description": "Capture and organize notes from Claude.ai and any webpage",
   "permissions": ["storage", "activeTab", "scripting", "notifications"],
-  "host_permissions": ["https://claude.ai/*"],
+  "host_permissions": ["http://*/*", "https://*/*"],
   "background": {
     "service_worker": "background.js"
   },
@@ -17,7 +17,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://claude.ai/*"],
+      "matches": ["http://*/*", "https://*/*"],
       "js": ["content.js"],
       "css": ["content.css"],
       "run_at": "document_start"
@@ -25,8 +25,8 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["library.html", "library.js", "library.css"],
-      "matches": ["https://claude.ai/*"]
+      "resources": ["library.html", "library.js", "library.css", "images/cairn-stack.png"],
+      "matches": ["http://*/*", "https://*/*"]
     }
   ],
   "icons": {
@@ -34,4 +34,4 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   }
-} 
+}
