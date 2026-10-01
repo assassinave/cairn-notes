@@ -81,10 +81,9 @@ const injectHighlightStyles = () => {
   `;
 };
 
-// Design tokens for the redesigned Notes panel (#cairn-modal), matching the
-// "Panel" UI reference. Kept separate from `styles`/`baseStyles` above, which
-// remain in use by the Add-to-Topic modal, comment popover, and library-access
-// panel — none of those are in scope for this redesign.
+// Design tokens for the redesigned UI (Notes panel, onboarding, Add-to-Topic modal,
+// comment popover), matching the "Panel" UI reference. Kept separate from
+// `styles`/`baseStyles` below, which remain in use by the un-redesigned parts.
 const panel = {
   colors: {
     bg: '#F7F8F6',
@@ -141,6 +140,12 @@ const injectPanelStyles = () => {
     #cairn-modal .cairn-danger-btn:hover{color:${panel.colors.danger};background:${panel.colors.dangerBg}}
     #cairn-modal .cairn-primary-btn:hover, #cairn-onboarding-modal .cairn-primary-btn:hover{filter:brightness(1.1)}
     #cairn-modal .cairn-chip:hover{border-color:${panel.colors.borderStrong}}
+    #cairn-annotation-modal .cairn-ib:hover, #cairn-comment-popover .cairn-ib:hover{background:#EDF1EF;color:${panel.colors.text}}
+    #cairn-annotation-modal .cairn-ib, #cairn-comment-popover .cairn-ib{transition:background .15s,color .15s}
+    #cairn-annotation-modal .cairn-ghost-btn:hover, #cairn-comment-popover .cairn-ghost-btn:hover{background:#EDF1EF}
+    #cairn-annotation-modal .cairn-primary-btn:hover, #cairn-comment-popover .cairn-primary-btn:hover{filter:brightness(1.1)}
+    #cairn-annotation-modal .cairn-chip:hover{border-color:#B9C4BF}
+    #cairn-annotation-modal .cairn-field:focus, #cairn-comment-popover .cairn-field:focus{outline:none;border-color:${panel.colors.accent} !important;box-shadow:0 0 0 3px rgba(47,111,98,.14)}
   `;
 };
 
@@ -337,6 +342,7 @@ let sendCommentToInput = localStorage.getItem('cairn-send-on-comment') !== 'fals
 let activeArtifactName = null;
 let activeArtifactTimeout = null;
 let lastClipShortcutTime = 0;
+let lastClipShortcutKey = '';
 let hasInitialized = false;
 const CLIP_SHORTCUT_DOUBLE_TAP_MS = 400;
 
@@ -1097,18 +1103,21 @@ const ONBOARDING_STEPS = [
     kicker: 'Clips',
     heading: 'Clips keep what matters',
     body: 'Highlight any passage and save it as a clip. Clips stay with the site you saved them on, and each one links back to its spot in the conversation.',
+    shortcut: { keys: 'C C', label: 'Double-tap C with text selected to clip it instantly.' },
     claudeOnly: false
   },
   {
     kicker: 'Topics',
     heading: 'Topics gather your research',
     body: 'When you’re going deeper, file a clip under a topic. Topics pull clips together across Claude, ChatGPT, Gemini and Grok, so one line of research lives in one place.',
+    shortcut: { keys: 'T T', label: 'Double-tap T with text selected to add it to a topic. Your last topic stays selected.' },
     claudeOnly: false
   },
   {
     kicker: 'Comments',
     heading: 'Comments start your next prompt',
     body: 'Clip a passage and add a note. Both drop into Claude’s message box, ready to send, and the clip is still saved for later.',
+    shortcut: { keys: 'K K', label: 'Double-tap K with text selected to comment.' },
     claudeOnly: true
   }
 ];
@@ -1307,6 +1316,26 @@ function buildOnboardingCopy(step) {
   wrap.appendChild(kickerRow);
   wrap.appendChild(heading);
   wrap.appendChild(body);
+
+  if (step.shortcut) {
+    const tip = document.createElement('div');
+    applyStyles(tip, {
+      display: 'flex', alignItems: 'center', gap: '10px', marginTop: '6px', padding: '10px 12px',
+      background: panel.colors.card, border: `1px solid ${panel.colors.border}`, borderRadius: '10px'
+    });
+    const kbd = document.createElement('kbd');
+    kbd.textContent = step.shortcut.keys;
+    applyStyles(kbd, {
+      font: `500 12px ${panel.font.sans}`, background: panel.colors.bg, whiteSpace: 'nowrap',
+      border: `1px solid ${panel.colors.borderStrong}`, borderRadius: '6px',
+      padding: '2px 7px', color: panel.colors.subtext2
+    });
+    const label = document.createElement('span');
+    label.textContent = step.shortcut.label;
+    applyStyles(label, { fontSize: '13px', lineHeight: '1.4', color: panel.colors.subtext2 });
+    tip.append(kbd, label);
+    wrap.appendChild(tip);
+  }
   return wrap;
 }
 
@@ -1598,13 +1627,20 @@ function flashClipButtonSaved() {
   setTimeout(() => removeFloatingClipButtons(), 1000);
 }
 
-// Double-tap C with an active selection clips the text (same as Clip button).
-// Claude often steals focus to the composer on keypress — judge by where the
-// selection lives, not activeElement. Capture-phase + preventDefault keeps "c"
-// out of the chat box when we're claiming the shortcut.
+// Double-tap shortcuts with an active selection: C = Clip, T = Add to Topic,
+// K = Comment (Claude only). Claude often steals focus to the composer on
+// keypress — judge by where the selection lives, not activeElement. Capture-phase
+// + preventDefault keeps the letter out of the chat box when we claim the shortcut.
 function handleClipDoubleTapShortcut(e) {
   if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
-  if (e.key.toLowerCase() !== 'c') {
+  const key = e.key.toLowerCase();
+  const isCommentKey = key === 'k';
+  if (key !== 'c' && key !== 't' && !isCommentKey) {
+    lastClipShortcutTime = 0;
+    return;
+  }
+  // Comments are Claude-only
+  if (isCommentKey && isWebClipMode()) {
     lastClipShortcutTime = 0;
     return;
   }
@@ -1624,7 +1660,7 @@ function handleClipDoubleTapShortcut(e) {
 
   const isCodeBlock = isSelectionInCodeBlock(selection);
   const range = selection.getRangeAt(0);
-  // Claude: only clip message/code selections. Web: any page selection.
+  // Claude: only act on message/code selections. Web: any page selection.
   if (!isWebClipMode()) {
     const container = findMessageContainer(range.commonAncestorContainer);
     if (!container && !isCodeBlock) {
@@ -1638,14 +1674,25 @@ function handleClipDoubleTapShortcut(e) {
   e.stopPropagation();
 
   const now = Date.now();
-  if (now - lastClipShortcutTime <= CLIP_SHORTCUT_DOUBLE_TAP_MS) {
+  if (key === lastClipShortcutKey && now - lastClipShortcutTime <= CLIP_SHORTCUT_DOUBLE_TAP_MS) {
     lastClipShortcutTime = 0;
-    saveClip(selection, isCodeBlock, false);
-    flashClipButtonSaved();
+    lastClipShortcutKey = '';
+    if (key === 'c') {
+      saveClip(selection, isCodeBlock, false);
+      flashClipButtonSaved();
+    } else if (key === 't') {
+      removeFloatingClipButtons();
+      openAnnotationModal(selection, isCodeBlock);
+    } else {
+      const rect = range.getBoundingClientRect();
+      removeFloatingClipButtons();
+      openCommentPopover(selectedText, rect, range.cloneRange());
+    }
     return;
   }
 
   lastClipShortcutTime = now;
+  lastClipShortcutKey = key;
 }
 
 function handleTextSelection(e) {
@@ -3531,131 +3578,168 @@ function migrateLabelsToTopics(callback) {
     });
 }
 
+// Shared by the redesigned Add-to-Topic modal and comment popover
+const PANEL_CLOSE_ICON = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>';
+
+function createPanelFooter(saveBtn, cancelBtn) {
+  const footer = document.createElement('div');
+  applyStyles(footer, {
+    display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 16px',
+    borderTop: `1px solid ${panel.colors.border}`, background: panel.colors.bg
+  });
+  const hint = document.createElement('span');
+  applyStyles(hint, { fontSize: '12px', color: panel.colors.subtext, display: 'flex', alignItems: 'center', gap: '4px' });
+  const kbd = document.createElement('kbd');
+  kbd.textContent = '⌘ ↵';
+  applyStyles(kbd, {
+    font: `500 11px ${panel.font.sans}`, background: panel.colors.card,
+    border: `1px solid ${panel.colors.borderStrong}`, borderRadius: '5px',
+    padding: '1px 5px', color: panel.colors.subtext2
+  });
+  hint.appendChild(kbd);
+  hint.appendChild(document.createTextNode(' to save'));
+  const spacer = document.createElement('div');
+  spacer.style.flexGrow = '1';
+  footer.append(hint, spacer, cancelBtn, saveBtn);
+  return footer;
+}
+
+function createPanelFooterButtons(label) {
+  const cancelBtn = document.createElement('button');
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.className = 'cairn-ghost-btn';
+  applyStyles(cancelBtn, {
+    height: '38px', padding: '0 14px', border: '0', borderRadius: '10px',
+    background: 'transparent', color: panel.colors.subtext2,
+    font: `500 13px ${panel.font.sans}`, cursor: 'pointer'
+  });
+  const saveBtn = document.createElement('button');
+  saveBtn.textContent = label;
+  saveBtn.className = 'cairn-primary-btn';
+  applyStyles(saveBtn, {
+    height: '38px', padding: '0 16px', border: '0', borderRadius: '10px',
+    background: panel.colors.accent, color: '#FFFFFF',
+    font: `500 13px ${panel.font.sans}`, cursor: 'pointer'
+  });
+  return { cancelBtn, saveBtn };
+}
+
+function createPanelSectionLabel(text, forId) {
+  const el = document.createElement(forId ? 'label' : 'div');
+  if (forId) el.htmlFor = forId;
+  el.textContent = text;
+  applyStyles(el, {
+    fontSize: '12px', fontWeight: '600', color: panel.colors.subtext,
+    letterSpacing: '0.04em', textTransform: 'uppercase'
+  });
+  return el;
+}
+
 // Open a lightweight comment popover anchored below the selection
 function openCommentPopover(selectedText, selectionRect, range) {
+  injectPanelStyles();
   // Remove any existing comment popover
   const existing = document.getElementById('cairn-comment-popover');
   if (existing) existing.remove();
+
+  const popoverWidth = 360;
+  const maxLeft = window.scrollX + document.documentElement.clientWidth - popoverWidth - 8;
+  const left = Math.max(window.scrollX + 8, Math.min(selectionRect.left + window.scrollX, maxLeft));
 
   const popover = document.createElement('div');
   popover.id = 'cairn-comment-popover';
   applyStyles(popover, {
     position: 'absolute',
-    left: `${selectionRect.left + window.scrollX}px`,
+    left: `${left}px`,
     top: `${selectionRect.bottom + window.scrollY + 16}px`,
-    width: '320px',
-    backgroundColor: styles.colors.background.white,
-    border: `1px solid ${styles.colors.border}`,
-    borderRadius: '8px',
-    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-    zIndex: '10002',
-    fontFamily: "'Lato', Arial, sans-serif",
-    fontSize: '14px',
-    color: styles.colors.text.dark,
+    width: `${popoverWidth}px`,
+    minHeight: '340px',
+    boxSizing: 'border-box',
     display: 'flex',
     flexDirection: 'column',
-    gap: styles.spacing.sm,
-    padding: styles.spacing.md
+    background: panel.colors.bg,
+    border: `1px solid ${panel.colors.borderStrong}`,
+    borderRadius: '16px',
+    overflow: 'hidden',
+    boxShadow: '0 12px 32px rgba(28,38,36,.12)',
+    zIndex: '10002',
+    fontFamily: panel.font.sans,
+    fontSize: '14px',
+    color: panel.colors.text
   });
 
-  // Selected text preview styled like the existing highlight
-  const preview = document.createElement('div');
-  preview.textContent = selectedText;
-  applyStyles(preview, {
-    padding: `${styles.spacing.sm} ${styles.spacing.sm} ${styles.spacing.sm} 10px`,
-    borderLeft: `3px solid ${styles.colors.primary}`,
-    backgroundColor: 'rgba(201, 100, 66, 0.04)',
-    borderRadius: '0 2px 2px 0',
-    fontSize: '0.875rem',
-    lineHeight: '1.4',
-    maxHeight: '80px',
-    overflowY: 'auto',
+  // Header
+  const header = document.createElement('div');
+  applyStyles(header, { display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 10px 8px 16px' });
+  const title = document.createElement('div');
+  title.textContent = 'Add comment';
+  applyStyles(title, { fontSize: '15px', fontWeight: '600', letterSpacing: '-0.01em', flexGrow: '1' });
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'cairn-ib';
+  closeBtn.setAttribute('aria-label', 'Close');
+  closeBtn.innerHTML = PANEL_CLOSE_ICON;
+  applyStyles(closeBtn, panelIconButtonStyle());
+  header.append(title, closeBtn);
+
+  // Body
+  const body = document.createElement('div');
+  applyStyles(body, { flexGrow: '1', display: 'flex', flexDirection: 'column', gap: '12px', padding: '4px 16px 16px' });
+
+  const quote = document.createElement('div');
+  applyStyles(quote, {
+    display: 'flex', gap: '10px', alignItems: 'flex-start', background: panel.colors.card,
+    border: `1px solid ${panel.colors.border}`, borderRadius: '10px', padding: '10px 12px'
+  });
+  quote.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#5D6A67" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;margin-top:3px"><path d="M5 5h14v10H10l-4 4v-4H5z"></path></svg>';
+  const quoteText = document.createElement('p');
+  quoteText.textContent = `“${selectedText}”`;
+  applyStyles(quoteText, {
+    margin: '0', fontFamily: panel.font.serif, fontStyle: 'italic', fontSize: '15px',
+    lineHeight: '1.4', color: panel.colors.subtext2, maxHeight: '80px', overflowY: 'auto',
     wordBreak: 'break-word'
   });
+  quote.appendChild(quoteText);
 
-  // Textarea for the comment
+  const fieldWrap = document.createElement('div');
+  applyStyles(fieldWrap, { display: 'flex', flexDirection: 'column', gap: '6px', flexGrow: '1' });
   const textarea = document.createElement('textarea');
-  textarea.placeholder = 'Write a comment...';
+  textarea.id = 'cairn-comment-input';
+  textarea.className = 'cairn-field';
+  textarea.placeholder = sendCommentToInput
+    ? "Write your response and we'll save and populate the response in the chat"
+    : 'Write a comment...';
   applyStyles(textarea, {
-    width: '100%',
-    minHeight: '80px',
-    padding: styles.spacing.sm,
-    border: `1px solid ${styles.colors.border}`,
-    borderRadius: '4px',
-    fontSize: '14px',
-    fontFamily: 'inherit',
-    resize: 'vertical',
-    boxSizing: 'border-box',
-    outline: 'none'
+    flexGrow: '1', minHeight: '110px', resize: 'none', boxSizing: 'border-box', padding: '10px 12px',
+    border: '1px solid #D3DAD7', borderRadius: '10px', background: panel.colors.card,
+    color: panel.colors.text, font: `400 14px/1.45 ${panel.font.sans}`
   });
-  textarea.addEventListener('focus', () => {
-    textarea.style.borderColor = styles.colors.primary;
-  });
-  textarea.addEventListener('blur', () => {
-    textarea.style.borderColor = styles.colors.border;
-  });
+  fieldWrap.append(createPanelSectionLabel('Comment', 'cairn-comment-input'), textarea);
+  body.append(quote, fieldWrap);
 
-  // Action row
-  const actions = document.createElement('div');
-  applyStyles(actions, {
-    display: 'flex',
-    justifyContent: 'flex-end',
-    gap: styles.spacing.sm
-  });
+  const { cancelBtn, saveBtn } = createPanelFooterButtons('Save');
+  popover.append(header, body, createPanelFooter(saveBtn, cancelBtn));
 
-  const cancelBtn = document.createElement('button');
-  cancelBtn.textContent = 'Cancel';
-  applyStyles(cancelBtn, createStyleObject(baseStyles.actionButton, {
-    backgroundColor: styles.colors.text.normal,
-    fontSize: '13px',
-    padding: `${styles.spacing.xs} ${styles.spacing.sm}`
-  }));
-
-  const saveBtn = document.createElement('button');
-  saveBtn.textContent = 'Save';
-  applyStyles(saveBtn, createStyleObject(baseStyles.actionButton, {
-    backgroundColor: styles.colors.primary,
-    fontSize: '13px',
-    padding: `${styles.spacing.xs} ${styles.spacing.sm}`
-  }));
-
-  cancelBtn.addEventListener('click', () => {
+  const close = () => {
     popover.remove();
     document.removeEventListener('mousedown', onOutsideClick);
-  });
+  };
+  closeBtn.addEventListener('click', close);
+  cancelBtn.addEventListener('click', close);
 
   saveBtn.addEventListener('click', () => {
     const commentText = textarea.value.trim();
     if (!commentText) {
-      textarea.style.borderColor = '#f44336';
+      textarea.style.borderColor = panel.colors.danger;
       textarea.focus();
       return;
     }
     saveComment(selectedText, commentText, range);
-    popover.remove();
-    document.removeEventListener('mousedown', onOutsideClick);
+    close();
     if (sendCommentToInput) {
       setTimeout(() => sendToClaudeInput(`> "${selectedText}"\n\n${commentText}`), 50);
     }
   });
 
-  actions.appendChild(cancelBtn);
-  actions.appendChild(saveBtn);
-
-  const commentHint = document.createElement('div');
-  commentHint.textContent = '⌘ Return to save';
-  applyStyles(commentHint, {
-    fontSize: '0.7rem',
-    color: styles.colors.text.normal,
-    textAlign: 'right',
-    marginTop: '4px',
-    opacity: '0.7'
-  });
-
-  popover.appendChild(preview);
-  popover.appendChild(textarea);
-  popover.appendChild(actions);
-  popover.appendChild(commentHint);
   document.body.appendChild(popover);
   textarea.focus();
 
@@ -3668,10 +3752,7 @@ function openCommentPopover(selectedText, selectionRect, range) {
 
   // Close when clicking outside
   const onOutsideClick = (e) => {
-    if (!popover.contains(e.target)) {
-      popover.remove();
-      document.removeEventListener('mousedown', onOutsideClick);
-    }
+    if (!popover.contains(e.target)) close();
   };
   // Use setTimeout so the current mousedown event doesn't immediately close it
   setTimeout(() => document.addEventListener('mousedown', onOutsideClick), 0);
@@ -3710,125 +3791,204 @@ async function openAnnotationModal(selection, isCodeBlock) {
     const selectedText = selection.toString().trim();
     if (!selectedText) return; // Don't open if selection disappeared
     const range = selection.getRangeAt(0).cloneRange(); // Clone range for later use
+    injectPanelStyles();
 
     // --- Create Modal Elements ---
     const annotationModal = document.createElement('div');
     annotationModal.id = 'cairn-annotation-modal';
-    applyStyles(annotationModal, createStyleObject(baseStyles.modal, {
+    applyStyles(annotationModal, {
+        position: 'fixed',
         top: '50%',
         left: '50%',
-        transform: 'translate(-50%, -50%)', // Center the modal
-        width: '400px',
-        maxHeight: '80vh', // Limit height
+        transform: 'translate(-50%, -50%)',
+        width: '360px',
+        maxWidth: 'calc(100vw - 32px)',
+        maxHeight: '80vh',
+        boxSizing: 'border-box',
+        display: 'flex',
+        flexDirection: 'column',
+        background: panel.colors.bg,
+        border: `1px solid ${panel.colors.borderStrong}`,
+        borderRadius: '16px',
+        overflow: 'hidden',
+        boxShadow: '0 12px 32px rgba(28,38,36,.12)',
         zIndex: '10002', // Ensure it's above the main modal
-        display: 'flex' // Make sure it's visible
-    }));
+        fontFamily: panel.font.sans,
+        fontSize: '14px',
+        color: panel.colors.text
+    });
+    const closeModal = () => annotationModal.remove();
 
     // Header
     const modalHeader = document.createElement('div');
-    applyStyles(modalHeader, baseStyles.header);
-    const modalTitle = document.createElement('span');
-    modalTitle.textContent = 'Add to Topic';
-    applyStyles(modalTitle, { fontWeight: 'bold' });
+    applyStyles(modalHeader, { display: 'flex', alignItems: 'center', gap: '10px', padding: '14px 10px 10px 16px' });
+    const headerIcon = document.createElement('div');
+    applyStyles(headerIcon, {
+        width: '30px', height: '30px', borderRadius: '9px', background: panel.colors.iconBg,
+        color: panel.colors.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: '0'
+    });
+    headerIcon.innerHTML = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><ellipse cx="12" cy="18.5" rx="8" ry="3"></ellipse><ellipse cx="12" cy="12.6" rx="5.8" ry="2.6"></ellipse><ellipse cx="12" cy="7.2" rx="3.6" ry="2.2" fill="currentColor"></ellipse></svg>';
+    const modalTitle = document.createElement('div');
+    modalTitle.textContent = 'Add to topic';
+    applyStyles(modalTitle, { fontSize: '15px', fontWeight: '600', letterSpacing: '-0.01em', flexGrow: '1' });
     const closeButton = document.createElement('button');
-    applyStyles(closeButton, baseStyles.button);
-    closeButton.appendChild(CairnIcons.createIcon('x', 20, styles.colors.text.normal));
-    closeButton.onclick = () => document.body.removeChild(annotationModal);
-    modalHeader.appendChild(modalTitle);
-    modalHeader.appendChild(closeButton);
+    closeButton.className = 'cairn-ib';
+    closeButton.setAttribute('aria-label', 'Close');
+    closeButton.innerHTML = PANEL_CLOSE_ICON;
+    applyStyles(closeButton, panelIconButtonStyle());
+    closeButton.onclick = closeModal;
+    modalHeader.append(headerIcon, modalTitle, closeButton);
 
     // Content Area
     const modalContent = document.createElement('div');
-    applyStyles(modalContent, createStyleObject(baseStyles.content, { display: 'flex', flexDirection: 'column', gap: styles.spacing.md }));
-
-    // Preview Section
-    const previewLabel = document.createElement('div');
-    previewLabel.textContent = 'Selected text:';
-    applyStyles(previewLabel, { fontWeight: 'bold' });
-    const preview = document.createElement('div');
-    preview.textContent = selectedText;
-    applyStyles(preview, {
-        padding: styles.spacing.sm,
-        backgroundColor: styles.colors.background.light,
-        borderRadius: '4px',
-        fontSize: '0.875rem',
-        maxHeight: '150px', // Limit preview height
-        overflowY: 'auto'
+    applyStyles(modalContent, {
+        flexGrow: '1', overflowY: 'auto', padding: '4px 16px 16px',
+        display: 'flex', flexDirection: 'column', gap: '16px'
     });
 
-    // Labeling Section
-    const labelingSection = document.createElement('div');
-    applyStyles(labelingSection, { display: 'flex', flexDirection: 'column', gap: styles.spacing.sm });
-    
-    const existingTopics = await getTopics(); // Fetch existing topics (async)
-    let labelSelect;
+    // Selected text card
+    const previewCard = document.createElement('div');
+    applyStyles(previewCard, {
+        background: panel.colors.card, border: `1px solid ${panel.colors.border}`, borderRadius: '12px',
+        padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '6px'
+    });
+    const sourceLabel = getBucketSourceLabel(getBucketId());
+    const sourceRow = document.createElement('div');
+    applyStyles(sourceRow, { display: 'flex', alignItems: 'center', gap: '7px' });
+    const sourceDot = document.createElement('span');
+    applyStyles(sourceDot, {
+        width: '7px', height: '7px', borderRadius: '50%',
+        background: panel.sourceColors[sourceLabel] || panel.colors.muted
+    });
+    const sourceName = document.createElement('span');
+    sourceName.textContent = sourceLabel;
+    applyStyles(sourceName, { fontSize: '12px', fontWeight: '600', color: panel.colors.subtext2 });
+    const sourceHint = document.createElement('span');
+    sourceHint.textContent = 'Selected text';
+    applyStyles(sourceHint, { fontSize: '12px', color: panel.colors.subtext });
+    sourceRow.append(sourceDot, sourceName, sourceHint);
+    const preview = document.createElement('p');
+    preview.textContent = selectedText;
+    applyStyles(preview, {
+        margin: '0', fontFamily: panel.font.serif, fontSize: '15px', lineHeight: '1.5',
+        color: panel.colors.text, maxHeight: '150px', overflowY: 'auto', wordBreak: 'break-word'
+    });
+    previewCard.append(sourceRow, preview);
 
-    if (existingTopics.length > 0) {
-        const selectLabelText = document.createElement('label');
-        selectLabelText.textContent = 'Select existing topic:';
-        applyStyles(selectLabelText, { fontSize: '0.9rem', color: styles.colors.text.normal });
+    // Topic chips
+    const existingTopics = await getTopics();
+    let selectedTopicId = '';
+    // Last topic saved to stays selected across modal opens (and across sites, via chrome.storage)
+    const lastTopicId = await new Promise(resolve =>
+        chrome.storage.local.get('cairnLastTopicId', r => resolve(r.cairnLastTopicId || '')));
 
-        labelSelect = document.createElement('select');
-        applyStyles(labelSelect, { padding: styles.spacing.sm, border: `1px solid ${styles.colors.border}`, borderRadius: '4px' });
+    const chipsSection = document.createElement('div');
+    applyStyles(chipsSection, { display: 'flex', flexDirection: 'column', gap: '8px' });
+    const chipsWrap = document.createElement('div');
+    applyStyles(chipsWrap, { display: 'flex', flexWrap: 'wrap', gap: '6px' });
+    const chipButtons = new Map();
 
-        // Add a default "Select..." option
-        const defaultOption = document.createElement('option');
-        defaultOption.value = "";
-        defaultOption.textContent = "-- Select existing --";
-        labelSelect.appendChild(defaultOption);
-
-        // Add existing topics
-        existingTopics.forEach(topic => {
-            const option = document.createElement('option');
-            option.value = topic.id;
-            option.textContent = topic.name;
-            labelSelect.appendChild(option);
+    const styleChip = (chip, pressed) => {
+        chip.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+        applyStyles(chip, {
+            height: '32px', padding: '0 13px', borderRadius: '16px',
+            font: `500 12.5px ${panel.font.sans}`, cursor: 'pointer',
+            background: pressed ? panel.colors.accent : panel.colors.card,
+            color: pressed ? '#FFFFFF' : panel.colors.subtext2,
+            border: `1px solid ${pressed ? panel.colors.accent : panel.colors.borderStrong}`
         });
-        labelingSection.appendChild(selectLabelText);
-        labelingSection.appendChild(labelSelect);
+    };
+    const selectTopic = (id) => {
+        selectedTopicId = id;
+        chipButtons.forEach((chip, chipId) => styleChip(chip, chipId === id));
+    };
+    const addChip = (topic) => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'cairn-chip';
+        chip.textContent = topic.name;
+        styleChip(chip, false);
+        chip.onclick = () => selectTopic(topic.id === selectedTopicId ? '' : topic.id);
+        chipButtons.set(topic.id, chip);
+        chipsWrap.appendChild(chip);
+    };
+    existingTopics.forEach(addChip);
+    if (lastTopicId && chipButtons.has(lastTopicId)) selectTopic(lastTopicId);
+    if (existingTopics.length > 0) {
+        chipsSection.append(createPanelSectionLabel('Your topics'), chipsWrap);
     }
 
-    const newLabelLabel = document.createElement('label');
-    newLabelLabel.textContent = existingTopics.length > 0 ? 'Or add new topic:' : 'Add topic:';
-     applyStyles(newLabelLabel, { fontSize: '0.9rem', color: styles.colors.text.normal, marginTop: existingTopics.length > 0 ? styles.spacing.sm : '0' });
-
+    // New topic input
+    const newSection = document.createElement('div');
+    applyStyles(newSection, { display: 'flex', flexDirection: 'column', gap: '8px' });
+    const inputRow = document.createElement('div');
+    applyStyles(inputRow, { display: 'flex', gap: '8px' });
     const labelInput = document.createElement('input');
+    labelInput.id = 'cairn-new-topic';
+    labelInput.className = 'cairn-field';
     labelInput.type = 'text';
-    labelInput.placeholder = 'Enter new topic...';
-    applyStyles(labelInput, { padding: styles.spacing.sm, border: `1px solid ${styles.colors.border}`, borderRadius: '4px' });
-    labelingSection.appendChild(newLabelLabel);
-    labelingSection.appendChild(labelInput);
+    labelInput.placeholder = 'Topic name';
+    applyStyles(labelInput, {
+        flexGrow: '1', minWidth: '0', height: '40px', boxSizing: 'border-box', padding: '0 12px',
+        border: '1px solid #D3DAD7', borderRadius: '10px', background: panel.colors.card,
+        color: panel.colors.text, font: `400 14px ${panel.font.sans}`
+    });
+    const createTopicButton = document.createElement('button');
+    createTopicButton.type = 'button';
+    createTopicButton.className = 'cairn-ghost-btn';
+    createTopicButton.setAttribute('aria-label', 'Create topic');
+    createTopicButton.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>';
+    applyStyles(createTopicButton, {
+        width: '40px', height: '40px', flexShrink: '0', border: '1px solid #D3DAD7', borderRadius: '10px',
+        background: panel.colors.card, color: panel.colors.subtext2, display: 'flex',
+        alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '0'
+    });
+    inputRow.append(labelInput, createTopicButton);
+    newSection.append(
+        createPanelSectionLabel(existingTopics.length > 0 ? 'Or start a new one' : 'Start a topic', 'cairn-new-topic'),
+        inputRow
+    );
 
-    // Action Buttons
-    const modalActions = document.createElement('div');
-    applyStyles(modalActions, createStyleObject(baseStyles.actions, { borderTop: 'none', paddingTop: '0' })); // No border needed here
-    
-    const cancelButton = document.createElement('button');
-    cancelButton.textContent = 'Cancel';
-    applyStyles(cancelButton, createStyleObject(baseStyles.actionButton, { backgroundColor: styles.colors.text.normal }));
-    cancelButton.onclick = () => document.body.removeChild(annotationModal);
+    // "+" creates the topic now and selects it as a chip
+    const createTopicFromInput = async () => {
+        const name = labelInput.value.trim();
+        if (!name) {
+            labelInput.focus();
+            return;
+        }
+        const topic = await addTopic(name);
+        topicsCache = await getTopics();
+        if (!chipButtons.has(topic.id)) {
+            if (!chipsSection.contains(chipsWrap)) chipsSection.append(createPanelSectionLabel('Your topics'), chipsWrap);
+            addChip(topic);
+        }
+        selectTopic(topic.id);
+        labelInput.value = '';
+    };
+    createTopicButton.onclick = createTopicFromInput;
+    labelInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.metaKey) {
+            e.preventDefault();
+            createTopicFromInput();
+        }
+    });
 
-    const saveButton = document.createElement('button');
-    saveButton.textContent = 'Save';
-    applyStyles(saveButton, createStyleObject(baseStyles.actionButton, { backgroundColor: styles.colors.primary }));
+    // Footer
+    const { cancelBtn: cancelButton, saveBtn: saveButton } = createPanelFooterButtons('Save');
+    cancelButton.onclick = closeModal;
     saveButton.onclick = async () => {
-        let topicId = "";
-        // Prioritize dropdown selection if it exists and has a value
-        if (labelSelect && labelSelect.value) {
-            topicId = labelSelect.value;
-        } else {
-            const newTopicName = labelInput.value.trim();
-            if (!newTopicName) {
-                alert("Please select or enter a topic.");
-                return;
-            }
+        let topicId = selectedTopicId;
+        // A typed-but-not-yet-added name takes priority over the selected chip
+        const newTopicName = labelInput.value.trim();
+        if (newTopicName) {
             const topic = await addTopic(newTopicName);
             topicId = topic.id;
             topicsCache = await getTopics();
         }
 
         if (!topicId) {
-            alert("Please select or enter a topic.");
+            labelInput.style.borderColor = panel.colors.danger;
+            labelInput.focus();
             return;
         }
 
@@ -3849,7 +4009,7 @@ async function openAnnotationModal(selection, isCodeBlock) {
             if (supportsElementHighlights() && !clipRangeInfo) {
                  console.error("Could not get range info for annotation.");
                  alert("Error saving annotation context. Please try again.");
-                 document.body.removeChild(annotationModal);
+                 closeModal();
                  return;
             }
 
@@ -3862,6 +4022,7 @@ async function openAnnotationModal(selection, isCodeBlock) {
             );
         }
         clip.topicId = topicId; // Add the topic reference
+        chrome.storage.local.set({ cairnLastTopicId: topicId });
 
         clips.push(clip);
         currentClipId++; // Increment AFTER assigning
@@ -3879,34 +4040,15 @@ async function openAnnotationModal(selection, isCodeBlock) {
         }
         updateStorageAndUI(); // Save to storage and update main modal
 
-        document.body.removeChild(annotationModal); // Close this modal
+        closeModal();
     };
 
-    modalActions.appendChild(cancelButton);
-    modalActions.appendChild(saveButton);
-
-    const annotationHint = document.createElement('div');
-    annotationHint.textContent = '⌘ Return to save';
-    applyStyles(annotationHint, {
-      fontSize: '0.7rem',
-      color: styles.colors.text.normal,
-      textAlign: 'right',
-      marginTop: '4px',
-      opacity: '0.7'
-    });
-
     // --- Assemble Modal ---
-    modalContent.appendChild(previewLabel);
-    modalContent.appendChild(preview);
-    modalContent.appendChild(labelingSection);
-    annotationModal.appendChild(modalHeader);
-    annotationModal.appendChild(modalContent);
-    annotationModal.appendChild(modalActions);
-    annotationModal.appendChild(annotationHint);
-
-    // Add to document
+    modalContent.append(previewCard, chipsSection, newSection);
+    annotationModal.append(modalHeader, modalContent, createPanelFooter(saveButton, cancelButton));
     document.body.appendChild(annotationModal);
-    labelInput.focus(); // Focus the input field
+    // With a remembered topic, land on Save so Enter / ⌘↵ completes the flow immediately
+    (selectedTopicId ? saveButton : existingTopics.length > 0 ? chipsWrap.firstChild : labelInput).focus();
 
     annotationModal.addEventListener('keydown', (e) => {
       if (e.metaKey && e.key === 'Enter') {
@@ -3914,4 +4056,4 @@ async function openAnnotationModal(selection, isCodeBlock) {
         saveButton.click();
       }
     });
-} 
+}

@@ -43,8 +43,8 @@ function togglePanelOrOpenLibrary(tab) {
       if (chrome.runtime.lastError) {
         console.error('Error toggling panel:', chrome.runtime.lastError);
 
-        // On Claude, try injecting the content script once
-        if (tab.url && tab.url.includes('claude.ai')) {
+        // No receiver (e.g. tab opened before install/reload): inject once and retry
+        if (tab.url && /^https?:/.test(tab.url)) {
           chrome.scripting.executeScript({
             target: { tabId: tab.id },
             files: ['content.js']
@@ -68,7 +68,7 @@ function togglePanelOrOpenLibrary(tab) {
           return;
         }
 
-        // Elsewhere: open Library if the content script isn't ready
+        // Non-web pages: open Library
         openLibraryTab();
         return;
       }
