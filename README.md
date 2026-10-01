@@ -1,5 +1,9 @@
 # Cairn Notes
 
+[![Cairn promo — click to watch the full video](promo/cairn-promo.gif)](promo/cairn-promo.mp4)
+
+*Click the preview to watch the full 30-second video (MP4).*
+
 A Chrome extension (Manifest V3) that lets you capture and organize responses from Claude.ai conversations.
 
 ## What it does
