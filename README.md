@@ -4,29 +4,34 @@
 
 *Click the preview to watch the full 30-second video (MP4).*
 
-A Chrome extension (Manifest V3) that lets you capture and organize responses from Claude.ai conversations.
+A Chrome extension (Manifest V3) for keeping what matters from everything you read — on Claude.ai, other AI chats, or any web page.
 
 ## What it does
 
-**Three ways to save content from a conversation:**
+Select text on a page and a small bar appears with these actions:
 
-- **Clip** — saves a block of text and marks it with a left-border highlight in the conversation. Useful for preserving anything you want to revisit.
-- **Annotate** — same as Clip, but attaches a label and uses a secondary highlight color. Good for tagging content by theme or action item.
-- **Comment** — saves selected text with a free-form note attached. Highlighted in yellow in the conversation. Comments don't appear in Clips — they live in their own tab.
+- **Clip** — saves the selection and highlights it on the page so you can find it again.
+- **Add to Topic** — saves the selection under a topic (pick an existing one or create a new one) with a separate highlight color. Your last-used topic stays selected, so filing a run of clips takes one click each. Topics are shared across every site: a topic you use in Claude and on any other page collects all of those clips in one place.
+- **Comment** *(Claude.ai only)* — saves the selection with a note attached, highlighted in yellow.
 
-Select any text in a Claude conversation and a button bar appears with all three options.
+**Keyboard shortcuts** — with text selected, double-tap a key within about 400ms:
 
-**Keyboard shortcut:**
+| Keys | Action |
+|---|---|
+| `c` `c` | Clip |
+| `t` `t` | Add to Topic |
+| `k` `k` | Comment (Claude.ai only) |
 
-With text selected in a message (or code block), double-tap **`c`** within about 400ms to Clip it — same as clicking the Clip button. Works even when Claude steals focus to the chat box; the taps are blocked from typing into the composer. Ignored while you're selecting inside the composer or Cairn UI, and when Cmd/Ctrl/Alt is held (so Copy still works).
+Shortcut saves don't open the Notes panel; a small toast appears at the top right with an **Open notes** link instead. Shortcuts are ignored inside Cairn's own UI and when Cmd/Ctrl/Alt is held, so Copy still works. On Claude.ai they're also ignored while selecting inside the message composer.
 
-**In-conversation modal:**
+**Notes panel** — an in-page panel with **Clips** (for the current page or conversation), **Topics** (filter by topic across every site), and on Claude.ai **Comments**. Click a card to scroll back to its highlight. Open it from the extension's toolbar icon on any site, or the **Notes** button next to Share in a Claude conversation header. It also opens automatically on pages where you already have clips.
 
-A floating modal loads automatically on every conversation. It shows your Clips, Annotations, and Comments in separate tabs. Click any card to scroll back to the highlighted text. Dismiss it with the close button; reopen it with the **Notes** button next to Share in the conversation header.
+**Settings** — the gear icon in the Notes panel header lets you:
 
-**Library page:**
+- turn off **Show buttons on highlight**, if the selection bar pops up more than you'd like — the double-tap shortcuts keep working, and
+- **View onboarding again**.
 
-Click the extension toolbar icon to open a full-page library. Browse all saved notes across every conversation, search by keyword, filter annotations by label, and export everything as Markdown.
+**Library** — **Open notebook** in the Notes panel opens a full-page library of every saved note across all sites, with Clips, Topics, and Comments tabs, search, topic management, and a Markdown download for each conversation or site.
 
 ## Installation
 
@@ -39,11 +44,13 @@ This is a development build — no Web Store listing yet.
 
 ## Storage
 
-Everything is saved locally via Chrome's storage API under the key `claudeNotesV2`. Nothing leaves your browser.
+Everything is saved locally via Chrome's storage API — notes under `cairnNotesV2`, topics under `cairnTopics`. Nothing leaves your browser.
 
 ## Development
 
-Edit the files, then reload the extension at `chrome://extensions/` and refresh Claude.ai. Most logic lives in `content.js`; the library page is `library.html/js/css`; `background.js` is a thin message relay.
+Edit the files, then reload the extension at `chrome://extensions/` and refresh the page you're testing on. Most logic lives in `content.js`; the library page is `library.html/js/css`; `background.js` is a thin message relay.
+
+The promo video is rendered from `promo/promo.html` — open it in Chrome for a live preview, or add `?t=12` to the URL to freeze a single frame.
 
 ## License
 
