@@ -142,6 +142,9 @@ const injectPanelStyles = () => {
     #cairn-modal .cairn-chip:hover{border-color:${panel.colors.borderStrong}}
     #cairn-annotation-modal .cairn-ib:hover, #cairn-comment-popover .cairn-ib:hover{background:#EDF1EF;color:${panel.colors.text}}
     #cairn-annotation-modal .cairn-ib, #cairn-comment-popover .cairn-ib{transition:background .15s,color .15s}
+    #cairn-toast .cairn-ghost-btn:hover{background:#EDF1EF}
+    .cairn-sel-ghost:hover{background:#EDF1EF !important;color:${panel.colors.text} !important}
+    .cairn-sel-primary:hover{filter:brightness(1.1)}
     #cairn-annotation-modal .cairn-ghost-btn:hover, #cairn-comment-popover .cairn-ghost-btn:hover{background:#EDF1EF}
     #cairn-annotation-modal .cairn-primary-btn:hover, #cairn-comment-popover .cairn-primary-btn:hover{filter:brightness(1.1)}
     #cairn-annotation-modal .cairn-chip:hover{border-color:#B9C4BF}
@@ -339,6 +342,13 @@ let isApplyingHighlights = false;
 let currentAnnotationFilter = null; // Holds a topic id when the Topics tab filter is active
 let topicsCache = []; // In-memory mirror of cairnTopics, kept in sync so sync render paths can resolve topicId -> name
 let sendCommentToInput = localStorage.getItem('cairn-send-on-comment') !== 'false';
+// Whether the floating Clip / Add to Topic / Comment bar appears on text selection.
+// Off = shortcuts (double-tap c / t / k) still work. Global, stored in chrome.storage.
+const SHOW_SELECTION_BUTTONS_KEY = 'cairnShowSelectionButtons';
+let showSelectionButtons = true;
+chrome.storage.local.get(SHOW_SELECTION_BUTTONS_KEY, (r) => {
+  showSelectionButtons = r[SHOW_SELECTION_BUTTONS_KEY] !== false;
+});
 let activeArtifactName = null;
 let activeArtifactTimeout = null;
 let lastClipShortcutTime = 0;
@@ -393,29 +403,39 @@ function ensureBucket() {
   }
 }
 
-// Style utility functions
+// Floating selection bar (Clip / Add to Topic / Comment), styled with the
+// redesigned panel tokens: a small card holding an accent-filled primary action
+// and ghost secondary actions. Hover styles live in injectPanelStyles().
 const buttonStyles = {
-  base: {
-    padding: '5px 10px',
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: 'bold',
-    boxShadow: '0 2px 5px rgba(0, 0, 0, 0.2)'
-  },
   container: {
     position: 'absolute',
     zIndex: '10001',
     display: 'flex',
-    gap: '5px'
+    alignItems: 'center',
+    gap: '2px',
+    padding: '4px',
+    background: panel.colors.bg,
+    border: `1px solid ${panel.colors.borderStrong}`,
+    borderRadius: '12px',
+    boxShadow: '0 12px 32px rgba(28,38,36,.12)',
+    fontFamily: panel.font.sans
+  },
+  base: {
+    height: '30px',
+    padding: '0 12px',
+    border: '0',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    font: `500 12.5px ${panel.font.sans}`,
+    whiteSpace: 'nowrap'
   }
 };
 
 const applyButtonStyles = (button, type = 'primary') => {
   Object.assign(button.style, buttonStyles.base);
-  button.style.backgroundColor = type === 'primary' ? '#c96442' : '#444';
+  button.classList.add(type === 'primary' ? 'cairn-sel-primary' : 'cairn-sel-ghost');
+  button.style.background = type === 'primary' ? panel.colors.accent : 'transparent';
+  button.style.color = type === 'primary' ? '#FFFFFF' : panel.colors.subtext2;
 };
 
 function getChatComposerEditable(root) {
@@ -629,6 +649,10 @@ function init() {
 function setupStorageChangeMonitoring() {
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== 'local') return;
+
+    if (changes[SHOW_SELECTION_BUTTONS_KEY]) {
+      showSelectionButtons = changes[SHOW_SELECTION_BUTTONS_KEY].newValue !== false;
+    }
 
     if (changes.cairnTopics) {
       topicsCache = changes.cairnTopics.newValue || [];
@@ -877,16 +901,14 @@ function createModal() {
 
   titleBlock.appendChild(modalTitle);
 
-  // Placeholder for a future settings panel — for now it just opens the
-  // onboarding modal so it can be previewed/tested on demand. Whether this
-  // stays as the permanent way in (vs. a real settings surface) is TBD.
   const settingsButton = document.createElement('button');
   settingsButton.className = 'cairn-ib';
   settingsButton.setAttribute('aria-label', 'Settings');
   applyStyles(settingsButton, panelIconButtonStyle('36px'));
   settingsButton.appendChild(CairnIcons.createIcon('settings', 17, panel.colors.subtext));
-  settingsButton.addEventListener('click', () => {
-    openOnboardingModal();
+  settingsButton.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleSettingsMenu();
   });
 
   const closeButton = document.createElement('button');
@@ -1623,7 +1645,7 @@ function flashClipButtonSaved() {
     return;
   }
   clipButton.textContent = 'Saved!';
-  clipButton.style.backgroundColor = '#4CAF50';
+  clipButton.style.background = '#24574D';
   setTimeout(() => removeFloatingClipButtons(), 1000);
 }
 
@@ -1678,11 +1700,12 @@ function handleClipDoubleTapShortcut(e) {
     lastClipShortcutTime = 0;
     lastClipShortcutKey = '';
     if (key === 'c') {
-      saveClip(selection, isCodeBlock, false);
+      saveClip(selection, isCodeBlock, false, true);
       flashClipButtonSaved();
+      showCairnToast('Clip saved', 'clips');
     } else if (key === 't') {
       removeFloatingClipButtons();
-      openAnnotationModal(selection, isCodeBlock);
+      openAnnotationModal(selection, isCodeBlock, true);
     } else {
       const rect = range.getBoundingClientRect();
       removeFloatingClipButtons();
@@ -1695,7 +1718,150 @@ function handleClipDoubleTapShortcut(e) {
   lastClipShortcutKey = key;
 }
 
+// Open the Notes modal on a given tab (used by the toast's action link)
+function openNotesModal(tabId) {
+  if (!noteModal) return;
+  if (tabId) activeTab = tabId;
+  noteModal.style.display = 'flex';
+  updateModalContent();
+  applyModalPosition();
+}
+
+// Small top-right confirmation for shortcut saves, with a link into the Notes modal.
+// Skipped when the modal is already open (it already shows the new item).
+let cairnToastTimer = null;
+function showCairnToast(message, tabId) {
+  if (noteModal && noteModal.style.display !== 'none') return;
+  injectPanelStyles();
+  const existing = document.getElementById('cairn-toast');
+  if (existing) existing.remove();
+  clearTimeout(cairnToastTimer);
+
+  const toast = document.createElement('div');
+  toast.id = 'cairn-toast';
+  toast.setAttribute('role', 'status');
+  applyStyles(toast, {
+    position: 'fixed', top: '20px', right: '20px', zIndex: '10003',
+    display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 10px 10px 14px',
+    background: panel.colors.bg, color: panel.colors.text,
+    border: `1px solid ${panel.colors.borderStrong}`, borderRadius: '12px',
+    boxShadow: '0 12px 32px rgba(28,38,36,.12)',
+    font: `500 13px ${panel.font.sans}`
+  });
+  const text = document.createElement('span');
+  text.textContent = message;
+  const link = document.createElement('button');
+  link.type = 'button';
+  link.className = 'cairn-ghost-btn';
+  link.textContent = 'Open notes';
+  applyStyles(link, {
+    height: '30px', padding: '0 10px', border: '0', borderRadius: '8px', background: 'transparent',
+    color: panel.colors.accent, font: `600 13px ${panel.font.sans}`, cursor: 'pointer'
+  });
+  const dismiss = () => { toast.remove(); clearTimeout(cairnToastTimer); };
+  link.addEventListener('click', () => { dismiss(); openNotesModal(tabId); });
+  toast.append(text, link);
+  document.body.appendChild(toast);
+
+  const arm = () => { cairnToastTimer = setTimeout(dismiss, 4000); };
+  toast.addEventListener('mouseenter', () => clearTimeout(cairnToastTimer));
+  toast.addEventListener('mouseleave', arm);
+  arm();
+}
+
+// Small settings menu anchored under the header's settings icon: a toggle for the
+// floating selection buttons, and a way back into the onboarding walkthrough.
+function toggleSettingsMenu() {
+  const existing = document.getElementById('cairn-settings-menu');
+  if (existing) {
+    existing.remove();
+    return;
+  }
+  if (!noteModal) return;
+
+  const menu = document.createElement('div');
+  menu.id = 'cairn-settings-menu';
+  applyStyles(menu, {
+    position: 'absolute', top: '58px', right: '12px', width: '280px', zIndex: '5',
+    boxSizing: 'border-box', padding: '6px', background: panel.colors.card,
+    border: `1px solid ${panel.colors.borderStrong}`, borderRadius: '12px',
+    boxShadow: '0 12px 32px rgba(28,38,36,.16)', fontFamily: panel.font.sans, color: panel.colors.text
+  });
+
+  // Toggle row: description on the left, switch on the right
+  const toggleRow = document.createElement('div');
+  applyStyles(toggleRow, {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '10px'
+  });
+  const textBlock = document.createElement('div');
+  applyStyles(textBlock, { display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '0' });
+  const toggleTitle = document.createElement('span');
+  toggleTitle.textContent = 'Show buttons on highlight';
+  applyStyles(toggleTitle, { fontSize: '13px', fontWeight: '600' });
+  const toggleDesc = document.createElement('span');
+  toggleDesc.textContent = 'Show Clip, Topic and Comment buttons when you select text. Shortcuts (C C, T T, K K) work either way.';
+  applyStyles(toggleDesc, { fontSize: '12px', lineHeight: '1.4', color: panel.colors.subtext });
+  textBlock.append(toggleTitle, toggleDesc);
+
+  const track = document.createElement('button');
+  track.type = 'button';
+  track.setAttribute('role', 'switch');
+  applyStyles(track, {
+    width: '34px', height: '18px', borderRadius: '9px', border: '0', padding: '0',
+    position: 'relative', cursor: 'pointer', transition: 'background-color 0.2s', flexShrink: '0'
+  });
+  const thumb = document.createElement('div');
+  applyStyles(thumb, {
+    width: '14px', height: '14px', borderRadius: '50%', background: '#fff',
+    position: 'absolute', top: '2px', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+  });
+  track.appendChild(thumb);
+  const renderToggle = () => {
+    track.setAttribute('aria-checked', showSelectionButtons ? 'true' : 'false');
+    track.style.background = showSelectionButtons ? panel.colors.accent : panel.colors.borderStrong;
+    thumb.style.left = showSelectionButtons ? '18px' : '2px';
+  };
+  renderToggle();
+  track.addEventListener('click', () => {
+    showSelectionButtons = !showSelectionButtons;
+    chrome.storage.local.set({ [SHOW_SELECTION_BUTTONS_KEY]: showSelectionButtons });
+    if (!showSelectionButtons) removeFloatingClipButtons();
+    renderToggle();
+  });
+  toggleRow.append(textBlock, track);
+
+  const divider = document.createElement('div');
+  applyStyles(divider, { height: '1px', background: panel.colors.border, margin: '2px 6px' });
+
+  const onboardingRow = document.createElement('button');
+  onboardingRow.type = 'button';
+  onboardingRow.className = 'cairn-ib';
+  onboardingRow.textContent = 'View onboarding again';
+  applyStyles(onboardingRow, {
+    width: '100%', textAlign: 'left', padding: '10px', border: '0', borderRadius: '8px',
+    background: 'transparent', color: panel.colors.text, cursor: 'pointer',
+    font: `500 13px ${panel.font.sans}`
+  });
+  onboardingRow.addEventListener('click', () => {
+    closeMenu();
+    openOnboardingModal();
+  });
+
+  menu.append(toggleRow, divider, onboardingRow);
+  noteModal.appendChild(menu);
+
+  const onOutside = (e) => {
+    if (!menu.contains(e.target) && !e.target.closest?.('[aria-label="Settings"]')) closeMenu();
+  };
+  function closeMenu() {
+    menu.remove();
+    document.removeEventListener('mousedown', onOutside, true);
+  }
+  document.addEventListener('mousedown', onOutside, true);
+}
+
 function handleTextSelection(e) {
+  if (!showSelectionButtons) return;
   const selection = window.getSelection();
   const selectedText = selection.toString().trim();
   if (!selectedText) return;
@@ -1717,6 +1883,7 @@ function handleTextSelection(e) {
 
 // Create a clip button near the selected text
 function createClipButton(selection, isCodeBlock) {
+  injectPanelStyles();
   // Remove any existing buttons first
   const existingButton = document.getElementById('cairn-clip-button');
   const existingSecondButton = document.getElementById('cairn-second-clip-button');
@@ -1760,7 +1927,7 @@ function createClipButton(selection, isCodeBlock) {
   clipButton.addEventListener('click', () => {
     saveClip(selection, isCodeBlock, false);
     clipButton.textContent = 'Saved!';
-    clipButton.style.backgroundColor = '#4CAF50';
+    clipButton.style.background = '#24574D';
     setTimeout(() => {
         // Find the container to remove
         const buttonContainer = clipButton.closest('div[style*="position: absolute"]');
@@ -1968,7 +2135,8 @@ function findIntersectingBlocks(range) {
     );
 }
 
-function saveClip(selection, isCodeBlock, isSecondary) {
+// quiet = don't pop the Notes modal open afterwards (used by keyboard shortcuts, which show a toast instead)
+function saveClip(selection, isCodeBlock, isSecondary, quiet = false) {
     const selectedText = selection.toString().trim();
     if (!selectedText) return;
 
@@ -1991,10 +2159,10 @@ function saveClip(selection, isCodeBlock, isSecondary) {
           });
         }
         currentClipId++;
-        updateStorageAndUI();
+        updateStorageAndUI(quiet);
     } else {
         // Handle non-list/non-multi-paragraph selections (single block)
-        handleSingleBlockSave(originalRange, selectedText, isCodeBlock, isSecondary);
+        handleSingleBlockSave(originalRange, selectedText, isCodeBlock, isSecondary, quiet);
     }
 }
 
@@ -2035,7 +2203,7 @@ function createMultiElementClip(blocks, text, isCodeBlock, isSecondary, id) {
 }
 
 // Helper function to handle saving a single block/non-list clip (refactored)
-function handleSingleBlockSave(range, text, isCodeBlock, isSecondary) {
+function handleSingleBlockSave(range, text, isCodeBlock, isSecondary, quiet = false) {
     const clip = createClipObject(range, text, isCodeBlock, isSecondary, currentClipId);
     clips.push(clip);
     currentClipId++;
@@ -2043,11 +2211,11 @@ function handleSingleBlockSave(range, text, isCodeBlock, isSecondary) {
       highlightText(range, clip.id, clip.isCode, clip.isSecondary);
     }
     // Update storage and UI after saving
-    updateStorageAndUI();
+    updateStorageAndUI(quiet);
 }
 
 // Refactored update logic
-function updateStorageAndUI() {
+function updateStorageAndUI(quiet = false) {
     ensureBucket();
     allClips[currentConversationId].clips = clips;
     allClips[currentConversationId].title = conversationTitle;
@@ -2056,7 +2224,7 @@ function updateStorageAndUI() {
     chrome.storage.local.set({ 'cairnNotesV2': allClips });
 
     updateModalContent();
-    if (noteModal) {
+    if (noteModal && !quiet) {
         noteModal.style.display = 'flex';
     }
 }
@@ -3786,7 +3954,7 @@ function saveComment(selectedText, commentText, range) {
 }
 
 // New function
-async function openAnnotationModal(selection, isCodeBlock) {
+async function openAnnotationModal(selection, isCodeBlock, quiet = false) {
     // Store selection info immediately
     const selectedText = selection.toString().trim();
     if (!selectedText) return; // Don't open if selection disappeared
@@ -4038,7 +4206,11 @@ async function openAnnotationModal(selection, isCodeBlock) {
             highlightText(range, clip.id, clip.isCode, clip.isSecondary);
           }
         }
-        updateStorageAndUI(); // Save to storage and update main modal
+        updateStorageAndUI(quiet); // Save to storage and update main modal
+        if (quiet) {
+            const topic = topicsCache.find(t => t.id === topicId);
+            showCairnToast(topic ? `Added to “${topic.name}”` : 'Added to topic', 'annotations');
+        }
 
         closeModal();
     };
